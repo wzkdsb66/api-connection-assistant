@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "minimum": {
+    "sillytavern": "1.18.0",
+    "tavernHelper": null
+  },
+  "requirements": [
+    {
+      "id": "host-context",
+      "owner": "sillytavern",
+      "symbol": "SillyTavern.getContext",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "connection-manager-settings",
+      "owner": "sillytavern",
+      "symbol": "extensionSettings.connectionManager",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "slash-command-profile",
+      "owner": "sillytavern",
+      "symbol": "SlashCommandParser.commands.profile",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "connection-manager-request-service",
+      "owner": "sillytavern",
+      "symbol": "ConnectionManagerRequestService.sendRequest",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "api-drawer-block",
+      "owner": "dom",
+      "symbol": "#rm_api_block",
+      "required": false,
+      "fallback": "API 面板入口不可用，仅显示悬浮窗与扩展设置面板"
+    },
+    {
+      "id": "extensions-settings-panel",
+      "owner": "dom",
+      "symbol": "#extensions_settings2",
+      "required": true,
+      "fallback": null
+    }
+  ]
+}

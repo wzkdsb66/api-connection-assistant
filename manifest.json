@@ -1,0 +1,18 @@
+{
+  "display_name": "API 连接助手",
+  "loading_order": 100,
+  "dependencies": [
+    "connection-manager"
+  ],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "linkw",
+  "version": "1.0.0",
+  "minimum_client_version": "1.18.0",
+  "hooks": {
+    "activate": "onActivate",
+    "disable": "onDisable"
+  },
+  "homePage": "https://github.com/wzkdsb66/api-connection-assistant",
+  "auto_update": true
+}
