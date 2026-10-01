@@ -5,7 +5,7 @@
   "js": "index.js",
   "css": "style.css",
   "author": "linkw",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minimum_client_version": "1.18.0",
   "hooks": {
     "activate": "onActivate",

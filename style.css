@@ -2,6 +2,19 @@
     contain: content;
 }
 
+/* ===== 淡蓝色毛玻璃基底 ===== */
+.aca-glass,
+#aca-float-root,
+.aca-modal {
+    background: linear-gradient(135deg, rgba(214, 234, 248, 0.72), rgba(190, 219, 240, 0.58));
+    backdrop-filter: blur(14px) saturate(1.35);
+    -webkit-backdrop-filter: blur(14px) saturate(1.35);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 8px 32px rgba(96, 149, 191, 0.28);
+    color: #24425c;
+}
+
+/* ===== 扩展设置面板 ===== */
 .aca-description {
     font-size: 0.9em;
     opacity: 0.85;
@@ -19,13 +32,14 @@
     display: flex;
     align-items: center;
     gap: 0.4em;
-    padding: 0.35em 0.4em;
-    border-radius: 0.4em;
-    background: rgba(128, 128, 128, 0.08);
+    padding: 0.4em 0.5em;
+    border-radius: 0.55em;
+    background: rgba(214, 234, 248, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .aca-profile-row.is-active {
-    outline: 1px solid rgba(120, 180, 255, 0.65);
+    outline: 2px solid rgba(97, 158, 212, 0.75);
 }
 
 .aca-profile-name {
@@ -58,57 +72,271 @@
     opacity: 0.85;
 }
 
-.aca-result {
-    font-size: 0.8em;
-    white-space: nowrap;
-}
-
-.aca-result.is-ok {
-    color: #7bd88f;
-}
-
-.aca-result.is-failed {
-    color: #ff8f8f;
+.aca-empty {
+    font-size: 0.85em;
+    opacity: 0.75;
 }
 
 .aca-button {
     padding: 0.2em 0.55em;
-    border-radius: 0.35em;
+    border-radius: 0.45em;
     cursor: pointer;
     white-space: nowrap;
+    border: 1px solid rgba(97, 158, 212, 0.4);
+    background: rgba(255, 255, 255, 0.45);
+    color: #24425c;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.aca-settings-actions {
-    margin-top: 0.5em;
+.aca-button:hover {
+    background: rgba(255, 255, 255, 0.75);
+    box-shadow: 0 2px 8px rgba(97, 158, 212, 0.25);
 }
 
-.aca-editor {
-    margin-top: 0.6em;
+.aca-primary {
+    background: linear-gradient(135deg, rgba(97, 158, 212, 0.85), rgba(120, 180, 230, 0.85));
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.aca-primary:hover {
+    background: linear-gradient(135deg, rgba(80, 145, 200, 0.95), rgba(105, 165, 220, 0.95));
+}
+
+.aca-danger {
+    color: #b04040;
+}
+
+/* ===== API 面板入口 ===== */
+#aca-api-entry {
+    margin: 0.5em 0;
     padding: 0.6em;
-    border-radius: 0.5em;
-    background: rgba(128, 128, 128, 0.1);
-    display: flex;
-    flex-direction: column;
-    gap: 0.5em;
+    border-radius: 0.6em;
+    background: linear-gradient(135deg, rgba(214, 234, 248, 0.55), rgba(190, 219, 240, 0.4));
+    border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
-.aca-editor.hidden {
+#aca-api-entry .aca-api-title {
+    font-weight: 700;
+    margin-bottom: 0.35em;
+    color: #24425c;
+}
+
+#aca-api-entry .aca-api-controls {
+    display: flex;
+    gap: 0.35em;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#aca-api-entry select {
+    flex: 1;
+    min-width: 8em;
+}
+
+/* ===== 闪电球（可拖动） ===== */
+#aca-float-ball {
+    position: fixed;
+    right: 1.1em;
+    top: 40%;
+    left: auto;
+    z-index: 10010;
+    width: 2.6em;
+    height: 2.6em;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.75), rgba(140, 190, 230, 0.75));
+    backdrop-filter: blur(10px) saturate(1.3);
+    -webkit-backdrop-filter: blur(10px) saturate(1.3);
+    color: #2a5a8c;
+    cursor: grab;
+    font-size: 1em;
+    box-shadow: 0 4px 16px rgba(96, 149, 191, 0.45);
+    touch-action: none;
+    user-select: none;
+}
+
+#aca-float-ball:active {
+    cursor: grabbing;
+}
+
+/* ===== 悬浮窗（可拖动 + 毛玻璃） ===== */
+#aca-float-root {
+    position: fixed;
+    right: 1.1em;
+    top: calc(40% + 3.2em);
+    z-index: 10000;
+    width: min(23em, 85vw);
+    max-height: 60vh;
+    overflow: auto;
+    padding: 0.7em;
+    border-radius: 0.8em;
+    cursor: default;
+}
+
+#aca-float-root.hidden,
+#aca-float-ball.hidden {
     display: none;
 }
 
-.aca-editor-title {
+#aca-float-root .aca-float-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-weight: 700;
+    margin-bottom: 0.4em;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    padding: 0.1em 0.2em;
+    border-radius: 0.4em;
+}
+
+#aca-float-root .aca-float-header:active {
+    cursor: grabbing;
+}
+
+#aca-float-root .aca-float-close {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 1.05em;
+    cursor: pointer;
+    padding: 0 0.3em;
+}
+
+#aca-float-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+}
+
+#aca-float-list .aca-float-item {
+    border-radius: 0.5em;
+    padding: 0.2em;
+}
+
+#aca-float-list .aca-float-item.is-active {
+    outline: 2px solid rgba(97, 158, 212, 0.75);
+}
+
+#aca-float-list .aca-float-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+}
+
+#aca-float-list .aca-float-name {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.32em 0.55em;
+    border-radius: 0.45em;
+    border: 1px solid rgba(97, 158, 212, 0.35);
+    background: rgba(255, 255, 255, 0.5);
+    color: #24425c;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+#aca-float-list .aca-float-name:hover {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+/* ===== 模型按钮 ===== */
+.aca-model-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25em;
+    padding: 0.3em 0 0.1em;
+}
+
+.aca-model-chip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.18em 0.55em;
+    border-radius: 0.7em;
+    border: 1px solid rgba(97, 158, 212, 0.45);
+    background: rgba(255, 255, 255, 0.45);
+    color: #2a5a8c;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.aca-model-chip:hover {
+    background: rgba(255, 255, 255, 0.85);
+}
+
+/* ===== 配置弹窗（命名+网址+密钥+保存） ===== */
+#aca-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10020;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(60, 100, 135, 0.25);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+
+#aca-modal-backdrop.is-open {
+    display: flex;
+}
+
+.aca-modal {
+    width: min(24em, 92vw);
+    max-height: 86vh;
+    overflow: auto;
+    padding: 0.9em;
+    border-radius: 0.9em;
+}
+
+.aca-modal-title {
+    font-weight: 700;
+    font-size: 1.05em;
+    margin-bottom: 0.5em;
+    color: #24425c;
+}
+
+.aca-modal-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55em;
 }
 
 .aca-field {
     display: flex;
     flex-direction: column;
-    gap: 0.2em;
-    font-size: 0.9em;
+    gap: 0.25em;
+    font-size: 0.92em;
 }
 
 .aca-field > span {
     opacity: 0.8;
+    font-weight: 600;
+}
+
+.aca-field input,
+.aca-field select {
+    border: 1px solid rgba(97, 158, 212, 0.4);
+    border-radius: 0.45em;
+    padding: 0.35em 0.5em;
+    background: rgba(255, 255, 255, 0.65);
+    color: #24425c;
+}
+
+.aca-field input:focus,
+.aca-field select:focus {
+    outline: 2px solid rgba(97, 158, 212, 0.6);
+    background: rgba(255, 255, 255, 0.85);
 }
 
 .aca-model-controls {
@@ -127,170 +355,21 @@
     min-width: 8em;
 }
 
-.aca-editor-actions {
+.aca-modal-actions {
     display: flex;
-    gap: 0.35em;
+    gap: 0.4em;
+    margin-top: 0.2em;
 }
 
-.aca-editor-status {
+.aca-modal-status {
     font-size: 0.85em;
     min-height: 1.2em;
 }
 
-.aca-editor-status.is-error {
-    color: #ff8f8f;
+.aca-modal-status.is-error {
+    color: #b04040;
 }
 
-.aca-danger {
-    color: #ff8f8f;
-}
-
-.aca-empty {
-    font-size: 0.85em;
-    opacity: 0.75;
-}
-
-#aca-api-entry {
-    margin: 0.5em 0;
-    padding: 0.5em;
-    border-radius: 0.5em;
-    background: rgba(128, 128, 128, 0.1);
-}
-
-#aca-api-entry .aca-api-title {
-    font-weight: 700;
-    margin-bottom: 0.35em;
-}
-
-#aca-api-entry .aca-api-controls {
-    display: flex;
-    gap: 0.35em;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-#aca-api-entry select {
-    flex: 1;
-    min-width: 8em;
-}
-
-#aca-float-ball {
-    position: fixed;
-    right: 1.1em;
-    top: 40%;
-    z-index: 10000;
-    width: 2.4em;
-    height: 2.4em;
-    border-radius: 50%;
-    border: 1px solid rgba(128, 128, 128, 0.4);
-    background: rgba(30, 30, 40, 0.85);
-    color: #eee;
-    cursor: pointer;
-    font-size: 1em;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-}
-
-#aca-float-root {
-    position: fixed;
-    right: 1.1em;
-    top: calc(40% + 3em);
-    z-index: 10000;
-    width: min(22em, 85vw);
-    max-height: 60vh;
-    overflow: auto;
-    padding: 0.6em;
-    border-radius: 0.6em;
-    background: rgba(28, 28, 36, 0.96);
-    color: #eee;
-    border: 1px solid rgba(128, 128, 128, 0.35);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-#aca-float-root.hidden,
-#aca-float-ball.hidden {
-    display: none;
-}
-
-#aca-float-root .aca-float-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-weight: 700;
-    margin-bottom: 0.4em;
-    cursor: grab;
-    user-select: none;
-    touch-action: none;
-}
-
-#aca-float-root .aca-float-header:active {
-    cursor: grabbing;
-}
-
-#aca-float-root .aca-float-close {
-    border: none;
-    background: transparent;
-    color: inherit;
-    font-size: 1em;
-    cursor: pointer;
-}
-
-#aca-float-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35em;
-}
-
-#aca-float-list .aca-float-item {
-    border-radius: 0.4em;
-    padding: 0.15em;
-}
-
-#aca-float-list .aca-float-item.is-active {
-    outline: 1px solid rgba(120, 180, 255, 0.7);
-}
-
-#aca-float-list .aca-float-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35em;
-}
-
-#aca-float-list .aca-float-name {
-    flex: 1;
-    min-width: 0;
-    text-align: left;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 0.3em 0.5em;
-    border-radius: 0.35em;
-    border: 1px solid rgba(128, 128, 128, 0.3);
-    background: rgba(60, 60, 75, 0.8);
-    color: inherit;
-    cursor: pointer;
-}
-
-.aca-model-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25em;
-    padding: 0.3em 0 0.1em;
-}
-
-.aca-model-chip {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 0.15em 0.45em;
-    border-radius: 0.6em;
-    border: 1px solid rgba(120, 180, 255, 0.45);
-    background: rgba(40, 60, 90, 0.7);
-    color: inherit;
-    font-size: 0.8em;
-    cursor: pointer;
-}
-
-.aca-model-chip:hover {
-    background: rgba(70, 110, 160, 0.85);
+.hidden {
+    display: none !important;
 }

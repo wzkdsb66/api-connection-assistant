@@ -6,49 +6,16 @@
         </div>
         <div class="inline-drawer-content">
             <p class="aca-description">
-                管理自己的 API 配置（名称 + 地址 + 密钥 + 模型）。切换时只修改 API 连接，不会改动补全预设。
-                密钥会写入酒馆原生密钥库，并保存在本机扩展数据中用于拉取模型列表；不会导出、不随角色卡走。
+                管理自己的 API 配置（名称 + 地址 + 密钥）。切换时只修改 API 连接，不会改动补全预设。
+                密钥保存在酒馆原生密钥库与本机扩展数据中，不会导出、不随角色卡走。本插件不会发送任何消耗额度的请求。
             </p>
             <label class="checkbox_label">
                 <input id="aca-float-window-enabled" type="checkbox">
-                <span>启用悬浮快切窗（可拖动，位置自动记忆）</span>
+                <span>启用悬浮快切窗（闪电球与窗口均可拖动）</span>
             </label>
             <div id="aca-profile-list" class="aca-profile-list"></div>
             <div class="aca-settings-actions">
                 <button type="button" id="aca-add-profile" class="menu_button">新增 API 配置</button>
-            </div>
-            <div id="aca-editor" class="aca-editor hidden">
-                <div class="aca-editor-title" id="aca-editor-title">新增 API 配置</div>
-                <label class="aca-field">
-                    <span>名称</span>
-                    <input type="text" id="aca-editor-name" placeholder="例如：白天主力站">
-                </label>
-                <label class="aca-field">
-                    <span>API 地址</span>
-                    <input type="text" id="aca-editor-url" placeholder="https://example.com/v1">
-                </label>
-                <label class="aca-field">
-                    <span>密钥</span>
-                    <input type="password" id="aca-editor-key" placeholder="sk-...">
-                </label>
-                <label class="aca-field">
-                    <span>模型</span>
-                    <div class="aca-model-controls">
-                        <input type="text" id="aca-editor-model" placeholder="model-id">
-                        <select id="aca-editor-model-select"></select>
-                        <button type="button" id="aca-editor-fetch-models" class="menu_button">拉取模型</button>
-                    </div>
-                </label>
-                <label class="aca-field">
-                    <span>备注</span>
-                    <input type="text" id="aca-editor-note" placeholder="例如：晚上更快">
-                </label>
-                <div class="aca-editor-actions">
-                    <button type="button" id="aca-editor-save" class="menu_button">保存</button>
-                    <button type="button" id="aca-editor-cancel" class="menu_button">取消</button>
-                    <button type="button" id="aca-editor-delete" class="menu_button aca-danger">删除</button>
-                </div>
-                <div id="aca-editor-status" class="aca-editor-status"></div>
             </div>
         </div>
     </div>

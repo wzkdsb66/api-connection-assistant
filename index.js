@@ -1,16 +1,12 @@
-import { SECRET_KEYS, writeSecret, deleteSecret } from '../../../secrets.js';
-
 const MODULE_ID = 'api-connection-assistant';
 const DEFAULT_SETTINGS = Object.freeze({
     profiles: [],
     activeProfileId: null,
     floatWindowEnabled: false,
     floatWindowPosition: null,
+    floatBallPosition: null,
 });
 const FETCH_TIMEOUT_MS = 15000;
-const expandedProfileModels = new Set();
-let editorProfileId = null;
-let editorModelChoices = [];
 
 function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
@@ -29,6 +25,9 @@ function getSettings() {
     }
     if (!settings.floatWindowPosition || typeof settings.floatWindowPosition !== 'object') {
         settings.floatWindowPosition = null;
+    }
+    if (!settings.floatBallPosition || typeof settings.floatBallPosition !== 'object') {
+        settings.floatBallPosition = null;
     }
     context.extensionSettings[MODULE_ID] = settings;
     return settings;
@@ -55,25 +54,15 @@ function escapeHtml(value) {
         .replaceAll("'", '&#39;');
 }
 
-function formatTime(timestamp) {
-    if (!timestamp) {
-        return '—';
-    }
-    return new Date(timestamp).toLocaleString();
-}
-
 function normalizeApiUrl(apiUrl) {
     return String(apiUrl ?? '').trim().replace(/\/+$/, '');
 }
 
-function showStatus(message, isError = false) {
-    const status = document.getElementById('aca-editor-status');
+function showEditorStatus(message, isError = false) {
+    const status = document.getElementById('aca-modal-status');
     if (status) {
         status.textContent = message;
         status.classList.toggle('is-error', isError);
-    }
-    if (isError) {
-        toastr?.error?.(message, 'API 连接助手');
     }
 }
 
@@ -84,6 +73,7 @@ async function ensureSecret(profile) {
     if (profile.secretId) {
         return profile.secretId;
     }
+    const { SECRET_KEYS, writeSecret } = await import('../../../secrets.js');
     const secretId = await writeSecret(SECRET_KEYS.CUSTOM, profile.apiKey, profile.name);
     if (!secretId) {
         throw new Error('写入酒馆密钥库失败。');
@@ -108,7 +98,7 @@ async function applyProfileById(profileId) {
     }
     const secretId = await ensureSecret(profile);
     await runCommand('api', { quiet: 'true' }, 'custom');
-    await runCommand('secret-id', { quiet: 'true', key: SECRET_KEYS.CUSTOM }, secretId);
+    await runCommand('secret-id', { quiet: 'true', key: 'api_key_custom' }, secretId);
     await runCommand('api-url', { api: 'custom', connect: 'true', quiet: 'true' }, normalizeApiUrl(profile.apiUrl));
     if (profile.model) {
         await runCommand('model', { quiet: 'true' }, profile.model);
@@ -126,12 +116,11 @@ async function fetchModelsForProfile(profileId) {
         throw new Error('找不到这个 API 配置。');
     }
     if (!profile.apiKey) {
-        throw new Error('请先在设置里填写密钥。');
+        throw new Error('请先在编辑里填写密钥。');
     }
     const modelsUrl = `${normalizeApiUrl(profile.apiUrl)}/models`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const startedAt = performance.now();
     try {
         const response = await fetch(modelsUrl, {
             method: 'GET',
@@ -146,27 +135,13 @@ async function fetchModelsForProfile(profileId) {
             ? data.data.map((item) => item?.id).filter((id) => typeof id === 'string' && id.length > 0)
             : [];
         profile.models = models;
-        profile.lastTest = {
-            ok: true,
-            latencyMs: Math.round(performance.now() - startedAt),
-            message: models.length > 0 ? `连接成功，${models.length} 个模型` : '连接成功（站点未返回模型列表）',
-            testedAt: Date.now(),
-        };
         saveSettings();
         return models;
     } catch (error) {
-        const latencyMs = Math.round(performance.now() - startedAt);
         const isNetworkError = error instanceof TypeError;
         const reason = isNetworkError
             ? '无法访问站点：可能是跨域限制或网络问题'
             : (error?.name === 'AbortError' ? `超过 ${FETCH_TIMEOUT_MS / 1000} 秒未响应` : (error?.message ?? String(error)));
-        profile.lastTest = {
-            ok: false,
-            latencyMs,
-            message: reason,
-            testedAt: Date.now(),
-        };
-        saveSettings();
         throw new Error(reason);
     } finally {
         clearTimeout(timeoutId);
@@ -178,30 +153,20 @@ async function runFetchModels(profileId, button) {
     button.disabled = true;
     button.textContent = '拉取中…';
     try {
-        await fetchModelsForProfile(profileId);
+        const models = await fetchModelsForProfile(profileId);
         renderAll();
         if (editorProfileId === profileId) {
-            editorModelChoices = findProfileById(profileId)?.models ?? [];
-            renderEditorModelChoices();
+            editorModelChoices = models;
+            renderModalModelChoices();
         }
+        toastr?.success?.(`获取到 ${models.length} 个模型`, 'API 连接助手');
     } catch (error) {
         renderAll();
-        toastr?.warning?.(error?.message ?? String(error), 'API 连接测试');
+        toastr?.warning?.(error?.message ?? String(error), '拉取模型');
     } finally {
         button.disabled = false;
         button.textContent = originalText;
     }
-}
-
-function getTestBadge(profile) {
-    const result = profile.lastTest;
-    if (!result) {
-        return '<span class="aca-result">未测试</span>';
-    }
-    const className = result.ok ? 'is-ok' : 'is-failed';
-    const title = `${escapeHtml(result.message)}（${escapeHtml(formatTime(result.testedAt))}）`;
-    const latency = `${result.latencyMs}ms`;
-    return `<span class="aca-result ${className}" title="${title}">${result.ok ? '✓' : '✗'} ${latency}</span>`;
 }
 
 function renderSettingsList() {
@@ -221,7 +186,6 @@ function renderSettingsList() {
                 <span class="aca-profile-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</span>
                 <span class="aca-profile-meta" title="${escapeHtml(profile.apiUrl)}">${escapeHtml(profile.apiUrl)}</span>
                 <span class="aca-profile-model" title="${escapeHtml(profile.model)}">${escapeHtml(profile.model || '未设模型')}</span>
-                ${getTestBadge(profile)}
                 <button type="button" class="aca-button menu_button" data-action="apply">应用</button>
                 <button type="button" class="aca-button menu_button" data-action="models">拉模型</button>
                 <button type="button" class="aca-button menu_button" data-action="edit">编辑</button>
@@ -230,8 +194,8 @@ function renderSettingsList() {
     }).join('');
 }
 
-function renderEditorModelChoices() {
-    const select = document.getElementById('aca-editor-model-select');
+function renderModalModelChoices() {
+    const select = document.getElementById('aca-modal-model-select');
     if (!select) {
         return;
     }
@@ -239,7 +203,7 @@ function renderEditorModelChoices() {
         select.innerHTML = '<option value="">暂无模型列表</option>';
         return;
     }
-    const currentModel = document.getElementById('aca-editor-model')?.value ?? '';
+    const currentModel = document.getElementById('aca-modal-model')?.value ?? '';
     select.innerHTML = editorModelChoices
         .map((model) => `<option value="${escapeHtml(model)}"${model === currentModel ? ' selected' : ''}>${escapeHtml(model)}</option>`)
         .join('');
@@ -262,7 +226,7 @@ function renderApiEntry() {
         .join('');
     const activeProfile = settings.profiles.find((profile) => profile.id === settings.activeProfileId);
     status.innerHTML = activeProfile
-        ? `<span class="aca-api-model">${escapeHtml(activeProfile.model || '未设模型')}</span>${getTestBadge(activeProfile)}`
+        ? `<span class="aca-api-model">${escapeHtml(activeProfile.model || '未设模型')}</span>`
         : '';
 }
 
@@ -291,10 +255,16 @@ function renderFloatWindow() {
     if (!enabled) {
         return;
     }
-    const position = settings.floatWindowPosition;
-    if (position && Number.isFinite(position.x) && Number.isFinite(position.y)) {
-        floatRoot.style.left = `${Math.max(0, position.x)}px`;
-        floatRoot.style.top = `${Math.max(0, position.y)}px`;
+    const ballPosition = settings.floatBallPosition;
+    if (ballPosition && Number.isFinite(ballPosition.x) && Number.isFinite(ballPosition.y)) {
+        ball.style.left = `${Math.max(0, ballPosition.x)}px`;
+        ball.style.top = `${Math.max(0, ballPosition.y)}px`;
+        ball.style.right = 'auto';
+    }
+    const windowPosition = settings.floatWindowPosition;
+    if (windowPosition && Number.isFinite(windowPosition.x) && Number.isFinite(windowPosition.y)) {
+        floatRoot.style.left = `${Math.max(0, windowPosition.x)}px`;
+        floatRoot.style.top = `${Math.max(0, windowPosition.y)}px`;
         floatRoot.style.right = 'auto';
     }
     if (settings.profiles.length === 0) {
@@ -307,7 +277,7 @@ function renderFloatWindow() {
                 <button type="button" class="aca-float-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</button>
                 <span class="aca-float-model" title="${escapeHtml(profile.model)}">${escapeHtml(profile.model || '未设模型')}</span>
                 <button type="button" class="aca-button menu_button" data-action="models" title="展开/收起模型">模</button>
-                <button type="button" class="aca-button menu_button" data-action="fetch" title="拉取模型">拉</button>
+                <button type="button" class="aca-button menu_button" data-action="fetch" title="拉取模型列表">拉</button>
             </div>
             ${renderModelChips(profile)}
         </div>
@@ -320,49 +290,117 @@ function renderAll() {
     renderFloatWindow();
 }
 
-function openEditor(profileId) {
+function ensureModal() {
+    if (document.getElementById('aca-modal-backdrop')) {
+        return;
+    }
+    const backdrop = document.createElement('div');
+    backdrop.id = 'aca-modal-backdrop';
+    backdrop.dataset.extensionId = MODULE_ID;
+    backdrop.innerHTML = `
+        <div class="aca-modal" role="dialog" aria-modal="true">
+            <div class="aca-modal-title" id="aca-modal-title">新增 API 配置</div>
+            <div class="aca-modal-card">
+                <label class="aca-field">
+                    <span>配置命名</span>
+                    <input type="text" id="aca-modal-name" placeholder="例如：白天主力站">
+                </label>
+                <label class="aca-field">
+                    <span>网址</span>
+                    <input type="text" id="aca-modal-url" placeholder="https://example.com/v1">
+                </label>
+                <label class="aca-field">
+                    <span>密钥</span>
+                    <input type="password" id="aca-modal-key" placeholder="sk-...">
+                </label>
+                <label class="aca-field">
+                    <span>模型</span>
+                    <div class="aca-model-controls">
+                        <input type="text" id="aca-modal-model" placeholder="model-id">
+                        <select id="aca-modal-model-select"></select>
+                        <button type="button" id="aca-modal-fetch" class="menu_button">拉取模型</button>
+                    </div>
+                </label>
+                <div class="aca-modal-actions">
+                    <button type="button" id="aca-modal-save" class="menu_button aca-primary">保存</button>
+                    <button type="button" id="aca-modal-cancel" class="menu_button">取消</button>
+                    <button type="button" id="aca-modal-delete" class="menu_button aca-danger hidden">删除</button>
+                </div>
+                <div id="aca-modal-status" class="aca-modal-status"></div>
+            </div>
+        </div>
+    `;
+    backdrop.querySelector('#aca-modal-cancel')?.addEventListener('click', closeModal);
+    backdrop.querySelector('#aca-modal-save')?.addEventListener('click', saveModal);
+    backdrop.querySelector('#aca-modal-delete')?.addEventListener('click', () => {
+        if (editorProfileId) {
+            deleteProfileById(editorProfileId);
+        }
+    });
+    backdrop.querySelector('#aca-modal-fetch')?.addEventListener('click', async (event) => {
+        const profileId = editorProfileId;
+        if (!profileId) {
+            showEditorStatus('请先保存配置，再拉取模型列表。', true);
+            return;
+        }
+        await runFetchModels(profileId, event.currentTarget);
+    });
+    backdrop.querySelector('#aca-modal-model-select')?.addEventListener('change', (event) => {
+        const modelInput = document.getElementById('aca-modal-model');
+        if (modelInput && event.target.value) {
+            modelInput.value = event.target.value;
+        }
+    });
+    backdrop.addEventListener('click', (event) => {
+        if (event.target === backdrop) {
+            closeModal();
+        }
+    });
+    document.body.append(backdrop);
+}
+
+function openModal(profileId) {
+    ensureModal();
     editorProfileId = profileId;
-    const editor = document.getElementById('aca-editor');
-    if (!editor) {
+    const backdrop = document.getElementById('aca-modal-backdrop');
+    if (!backdrop) {
         return;
     }
     const profile = profileId ? findProfileById(profileId) : null;
     editorModelChoices = profile?.models ?? [];
-    document.getElementById('aca-editor-title').textContent = profile ? `编辑：${profile.name}` : '新增 API 配置';
-    document.getElementById('aca-editor-name').value = profile?.name ?? '';
-    document.getElementById('aca-editor-url').value = profile?.apiUrl ?? '';
-    document.getElementById('aca-editor-key').value = '';
-    document.getElementById('aca-editor-key').placeholder = profile ? '留空表示不修改密钥' : 'sk-...';
-    document.getElementById('aca-editor-model').value = profile?.model ?? '';
-    document.getElementById('aca-editor-note').value = profile?.note ?? '';
-    document.getElementById('aca-editor-delete').classList.toggle('hidden', !profile);
-    renderEditorModelChoices();
-    showStatus('');
-    editor.classList.remove('hidden');
+    document.getElementById('aca-modal-title').textContent = profile ? `编辑：${profile.name}` : '新增 API 配置';
+    document.getElementById('aca-modal-name').value = profile?.name ?? '';
+    document.getElementById('aca-modal-url').value = profile?.apiUrl ?? '';
+    document.getElementById('aca-modal-key').value = '';
+    document.getElementById('aca-modal-key').placeholder = profile ? '留空表示不修改密钥' : 'sk-...';
+    document.getElementById('aca-modal-model').value = profile?.model ?? '';
+    document.getElementById('aca-modal-delete').classList.toggle('hidden', !profile);
+    renderModalModelChoices();
+    showEditorStatus('');
+    backdrop.classList.add('is-open');
 }
 
-function closeEditor() {
+function closeModal() {
     editorProfileId = null;
     editorModelChoices = [];
-    document.getElementById('aca-editor')?.classList.add('hidden');
+    document.getElementById('aca-modal-backdrop')?.classList.remove('is-open');
 }
 
-async function saveEditor() {
-    const name = document.getElementById('aca-editor-name')?.value?.trim();
-    const apiUrl = normalizeApiUrl(document.getElementById('aca-editor-url')?.value);
-    const apiKey = document.getElementById('aca-editor-key')?.value?.trim();
-    const model = document.getElementById('aca-editor-model')?.value?.trim();
-    const note = document.getElementById('aca-editor-note')?.value?.trim();
+async function saveModal() {
+    const name = document.getElementById('aca-modal-name')?.value?.trim();
+    const apiUrl = normalizeApiUrl(document.getElementById('aca-modal-url')?.value);
+    const apiKey = document.getElementById('aca-modal-key')?.value?.trim();
+    const model = document.getElementById('aca-modal-model')?.value?.trim();
     if (!name) {
-        showStatus('请填写配置名称。', true);
+        showEditorStatus('请填写配置名称。', true);
         return;
     }
     if (!apiUrl) {
-        showStatus('请填写 API 地址。', true);
+        showEditorStatus('请填写 API 地址。', true);
         return;
     }
     if (!/^https?:\/\//i.test(apiUrl)) {
-        showStatus('API 地址必须以 http:// 或 https:// 开头。', true);
+        showEditorStatus('API 地址必须以 http:// 或 https:// 开头。', true);
         return;
     }
     const settings = getSettings();
@@ -370,7 +408,7 @@ async function saveEditor() {
     try {
         if (!profile) {
             if (!apiKey) {
-                showStatus('新增配置时必须填写密钥。', true);
+                showEditorStatus('新增配置时必须填写密钥。', true);
                 return;
             }
             profile = {
@@ -381,8 +419,6 @@ async function saveEditor() {
                 secretId: null,
                 model,
                 models: [],
-                note,
-                lastTest: null,
             };
             settings.profiles.push(profile);
             await ensureSecret(profile);
@@ -390,8 +426,8 @@ async function saveEditor() {
             profile.name = name;
             profile.apiUrl = apiUrl;
             profile.model = model;
-            profile.note = note;
             if (apiKey) {
+                const { SECRET_KEYS, deleteSecret } = await import('../../../secrets.js');
                 const oldSecretId = profile.secretId;
                 profile.apiKey = apiKey;
                 profile.secretId = null;
@@ -402,11 +438,11 @@ async function saveEditor() {
             }
         }
         saveSettings();
-        closeEditor();
+        closeModal();
         renderAll();
         toastr?.success?.(`已保存「${profile.name}」`, 'API 连接助手');
     } catch (error) {
-        showStatus(error?.message ?? String(error), true);
+        showEditorStatus(error?.message ?? String(error), true);
     }
 }
 
@@ -420,6 +456,7 @@ async function deleteProfileById(profileId) {
     }
     try {
         if (profile.secretId) {
+            const { SECRET_KEYS, deleteSecret } = await import('../../../secrets.js');
             await deleteSecret(SECRET_KEYS.CUSTOM, profile.secretId);
         }
     } catch (error) {
@@ -432,49 +469,55 @@ async function deleteProfileById(profileId) {
     }
     expandedProfileModels.delete(profileId);
     saveSettings();
-    closeEditor();
+    closeModal();
     renderAll();
 }
 
-function makeFloatWindowDraggable(floatRoot) {
-    const header = floatRoot.querySelector('.aca-float-header');
-    if (!header) {
-        return;
-    }
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function makeDraggable(dragHandle, target, positionKey, onClickCheck) {
     let dragging = false;
+    let moved = false;
     let offsetX = 0;
     let offsetY = 0;
-    header.addEventListener('pointerdown', (event) => {
-        if (event.target.closest('button')) {
+    dragHandle.addEventListener('pointerdown', (event) => {
+        if (onClickCheck?.(event)) {
             return;
         }
-        const rect = floatRoot.getBoundingClientRect();
+        const rect = target.getBoundingClientRect();
         offsetX = event.clientX - rect.left;
         offsetY = event.clientY - rect.top;
         dragging = true;
-        header.setPointerCapture(event.pointerId);
+        moved = false;
+        dragHandle.setPointerCapture(event.pointerId);
     });
-    header.addEventListener('pointermove', (event) => {
+    dragHandle.addEventListener('pointermove', (event) => {
         if (!dragging) {
             return;
         }
-        const x = Math.min(Math.max(0, event.clientX - offsetX), Math.max(0, window.innerWidth - floatRoot.offsetWidth));
-        const y = Math.min(Math.max(0, event.clientY - offsetY), Math.max(0, window.innerHeight - floatRoot.offsetHeight));
-        floatRoot.style.left = `${x}px`;
-        floatRoot.style.top = `${y}px`;
-        floatRoot.style.right = 'auto';
+        const x = clamp(event.clientX - offsetX, 0, Math.max(0, window.innerWidth - target.offsetWidth));
+        const y = clamp(event.clientY - offsetY, 0, Math.max(0, window.innerHeight - target.offsetHeight));
+        target.style.left = `${x}px`;
+        target.style.top = `${y}px`;
+        target.style.right = 'auto';
+        moved = true;
     });
-    header.addEventListener('pointerup', (event) => {
+    dragHandle.addEventListener('pointerup', (event) => {
         if (!dragging) {
             return;
         }
         dragging = false;
-        header.releasePointerCapture(event.pointerId);
-        const rect = floatRoot.getBoundingClientRect();
-        const settings = getSettings();
-        settings.floatWindowPosition = { x: rect.left, y: rect.top };
-        saveSettings();
+        dragHandle.releasePointerCapture(event.pointerId);
+        if (moved) {
+            const rect = target.getBoundingClientRect();
+            const settings = getSettings();
+            settings[positionKey] = { x: rect.left, y: rect.top };
+            saveSettings();
+        }
     });
+    return () => moved;
 }
 
 function createFloatWindow() {
@@ -494,7 +537,7 @@ function createFloatWindow() {
     floatRoot.classList.add('hidden');
     floatRoot.innerHTML = `
         <div class="aca-float-header">
-            <span>API 快切（可拖动）</span>
+            <span>API 快切</span>
             <button type="button" class="aca-float-close" title="收起">×</button>
         </div>
         <div id="aca-float-list"></div>
@@ -522,8 +565,7 @@ function createFloatWindow() {
             return;
         }
         if (button?.classList.contains('aca-model-chip')) {
-            const model = button.dataset.model;
-            profile.model = model;
+            profile.model = button.dataset.model;
             saveSettings();
             try {
                 await applyProfileById(profileId);
@@ -545,8 +587,9 @@ function createFloatWindow() {
             await runFetchModels(profileId, button);
         }
     });
-    makeFloatWindowDraggable(floatRoot);
     document.body.append(ball, floatRoot);
+    makeDraggable(ball, ball, 'floatBallPosition');
+    makeDraggable(floatRoot.querySelector('.aca-float-header'), floatRoot, 'floatWindowPosition', (event) => Boolean(event.target.closest('button')));
 }
 
 function createApiEntry() {
@@ -611,28 +654,7 @@ async function onActivate() {
             renderFloatWindow();
         });
     }
-    document.getElementById('aca-add-profile')?.addEventListener('click', () => openEditor(null));
-    document.getElementById('aca-editor-save')?.addEventListener('click', saveEditor);
-    document.getElementById('aca-editor-cancel')?.addEventListener('click', closeEditor);
-    document.getElementById('aca-editor-delete')?.addEventListener('click', () => {
-        if (editorProfileId) {
-            deleteProfileById(editorProfileId);
-        }
-    });
-    document.getElementById('aca-editor-fetch-models')?.addEventListener('click', async (event) => {
-        const profileId = editorProfileId;
-        if (!profileId) {
-            showStatus('请先保存配置，再拉取模型列表。', true);
-            return;
-        }
-        await runFetchModels(profileId, event.currentTarget);
-    });
-    document.getElementById('aca-editor-model-select')?.addEventListener('change', (event) => {
-        const modelInput = document.getElementById('aca-editor-model');
-        if (modelInput && event.target.value) {
-            modelInput.value = event.target.value;
-        }
-    });
+    document.getElementById('aca-add-profile')?.addEventListener('click', () => openModal(null));
     document.getElementById('aca-profile-list')?.addEventListener('click', async (event) => {
         const button = event.target.closest('button[data-action]');
         if (!button) {
@@ -655,7 +677,7 @@ async function onActivate() {
             return;
         }
         if (button.dataset.action === 'edit') {
-            openEditor(profileId);
+            openModal(profileId);
         }
     });
     renderAll();
@@ -666,6 +688,7 @@ function onDisable() {
     document.getElementById('aca-float-ball')?.remove();
     document.getElementById('aca-float-root')?.remove();
     document.getElementById('aca-api-entry')?.remove();
+    document.getElementById('aca-modal-backdrop')?.remove();
 }
 
 export { onActivate, onDisable };
