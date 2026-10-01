@@ -30,7 +30,7 @@
 
 .aca-profile-name {
     flex: 1;
-    min-width: 0;
+    min-width: 4em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -45,6 +45,17 @@
     white-space: nowrap;
     opacity: 0.7;
     font-size: 0.85em;
+}
+
+.aca-profile-model,
+.aca-float-model,
+.aca-api-model {
+    max-width: 10em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
+    opacity: 0.85;
 }
 
 .aca-result {
@@ -64,6 +75,79 @@
     padding: 0.2em 0.55em;
     border-radius: 0.35em;
     cursor: pointer;
+    white-space: nowrap;
+}
+
+.aca-settings-actions {
+    margin-top: 0.5em;
+}
+
+.aca-editor {
+    margin-top: 0.6em;
+    padding: 0.6em;
+    border-radius: 0.5em;
+    background: rgba(128, 128, 128, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+}
+
+.aca-editor.hidden {
+    display: none;
+}
+
+.aca-editor-title {
+    font-weight: 700;
+}
+
+.aca-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    font-size: 0.9em;
+}
+
+.aca-field > span {
+    opacity: 0.8;
+}
+
+.aca-model-controls {
+    display: flex;
+    gap: 0.35em;
+    align-items: center;
+}
+
+.aca-model-controls input {
+    flex: 1;
+    min-width: 6em;
+}
+
+.aca-model-controls select {
+    flex: 2;
+    min-width: 8em;
+}
+
+.aca-editor-actions {
+    display: flex;
+    gap: 0.35em;
+}
+
+.aca-editor-status {
+    font-size: 0.85em;
+    min-height: 1.2em;
+}
+
+.aca-editor-status.is-error {
+    color: #ff8f8f;
+}
+
+.aca-danger {
+    color: #ff8f8f;
+}
+
+.aca-empty {
+    font-size: 0.85em;
+    opacity: 0.75;
 }
 
 #aca-api-entry {
@@ -111,18 +195,19 @@
     right: 1.1em;
     top: calc(40% + 3em);
     z-index: 10000;
-    width: min(20em, 80vw);
-    max-height: 50vh;
+    width: min(22em, 85vw);
+    max-height: 60vh;
     overflow: auto;
     padding: 0.6em;
     border-radius: 0.6em;
-    background: rgba(28, 28, 36, 0.95);
+    background: rgba(28, 28, 36, 0.96);
     color: #eee;
     border: 1px solid rgba(128, 128, 128, 0.35);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-#aca-float-root.hidden {
+#aca-float-root.hidden,
+#aca-float-ball.hidden {
     display: none;
 }
 
@@ -132,6 +217,13 @@
     justify-content: space-between;
     font-weight: 700;
     margin-bottom: 0.4em;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+#aca-float-root .aca-float-header:active {
+    cursor: grabbing;
 }
 
 #aca-float-root .aca-float-close {
@@ -145,16 +237,25 @@
 #aca-float-list {
     display: flex;
     flex-direction: column;
-    gap: 0.3em;
+    gap: 0.35em;
 }
 
 #aca-float-list .aca-float-item {
+    border-radius: 0.4em;
+    padding: 0.15em;
+}
+
+#aca-float-list .aca-float-item.is-active {
+    outline: 1px solid rgba(120, 180, 255, 0.7);
+}
+
+#aca-float-list .aca-float-row {
     display: flex;
     align-items: center;
     gap: 0.35em;
 }
 
-#aca-float-list .aca-float-item button.aca-float-name {
+#aca-float-list .aca-float-name {
     flex: 1;
     min-width: 0;
     text-align: left;
@@ -169,6 +270,27 @@
     cursor: pointer;
 }
 
-#aca-float-list .aca-float-item.is-active button.aca-float-name {
-    border-color: rgba(120, 180, 255, 0.8);
+.aca-model-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25em;
+    padding: 0.3em 0 0.1em;
+}
+
+.aca-model-chip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.15em 0.45em;
+    border-radius: 0.6em;
+    border: 1px solid rgba(120, 180, 255, 0.45);
+    background: rgba(40, 60, 90, 0.7);
+    color: inherit;
+    font-size: 0.8em;
+    cursor: pointer;
+}
+
+.aca-model-chip:hover {
+    background: rgba(70, 110, 160, 0.85);
 }

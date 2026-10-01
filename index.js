@@ -1,13 +1,16 @@
+import { SECRET_KEYS, writeSecret, deleteSecret } from '../../../secrets.js';
+
 const MODULE_ID = 'api-connection-assistant';
 const DEFAULT_SETTINGS = Object.freeze({
+    profiles: [],
+    activeProfileId: null,
     floatWindowEnabled: false,
-    testResults: {},
+    floatWindowPosition: null,
 });
-
-const TEST_PROMPT = 'ping';
-const TEST_MAX_TOKENS = 1;
-const TEST_TIMEOUT_MS = 20000;
-const SWITCH_TIMEOUT_MS = 5000;
+const FETCH_TIMEOUT_MS = 15000;
+const expandedProfileModels = new Set();
+let editorProfileId = null;
+let editorModelChoices = [];
 
 function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
@@ -21,8 +24,11 @@ function getSettings() {
     const context = getContext();
     const current = context.extensionSettings[MODULE_ID] ?? {};
     const settings = { ...DEFAULT_SETTINGS, ...current };
-    if (!settings.testResults || typeof settings.testResults !== 'object') {
-        settings.testResults = {};
+    if (!Array.isArray(settings.profiles)) {
+        settings.profiles = [];
+    }
+    if (!settings.floatWindowPosition || typeof settings.floatWindowPosition !== 'object') {
+        settings.floatWindowPosition = null;
     }
     context.extensionSettings[MODULE_ID] = settings;
     return settings;
@@ -32,12 +38,8 @@ function saveSettings() {
     getContext().saveSettingsDebounced?.();
 }
 
-function getConnectionManager() {
-    return getContext().extensionSettings.connectionManager;
-}
-
 function getProfiles() {
-    return getConnectionManager()?.profiles ?? [];
+    return getSettings().profiles;
 }
 
 function findProfileById(profileId) {
@@ -60,107 +62,146 @@ function formatTime(timestamp) {
     return new Date(timestamp).toLocaleString();
 }
 
-function getResultBadge(profileId) {
-    const result = getSettings().testResults[profileId];
-    if (!result) {
-        return '<span class="aca-result">未测试</span>';
+function normalizeApiUrl(apiUrl) {
+    return String(apiUrl ?? '').trim().replace(/\/+$/, '');
+}
+
+function showStatus(message, isError = false) {
+    const status = document.getElementById('aca-editor-status');
+    if (status) {
+        status.textContent = message;
+        status.classList.toggle('is-error', isError);
     }
-    const className = result.ok ? 'is-ok' : 'is-failed';
-    const latency = result.latencyMs >= 0 ? `${result.latencyMs}ms` : '—';
-    return `<span class="aca-result ${className}" title="${escapeHtml(result.message)}（${escapeHtml(formatTime(result.testedAt))}）">${result.ok ? '✓' : '✗'} ${latency}</span>`;
+    if (isError) {
+        toastr?.error?.(message, 'API 连接助手');
+    }
 }
 
-function getProfileHint(profile) {
-    const api = profile.api || '未知 API';
-    const model = profile.model || '未设置模型';
-    return `${api} · ${model}`;
+async function ensureSecret(profile) {
+    if (!profile.apiKey) {
+        throw new Error('这个配置缺少密钥，请先编辑并填写密钥。');
+    }
+    if (profile.secretId) {
+        return profile.secretId;
+    }
+    const secretId = await writeSecret(SECRET_KEYS.CUSTOM, profile.apiKey, profile.name);
+    if (!secretId) {
+        throw new Error('写入酒馆密钥库失败。');
+    }
+    profile.secretId = secretId;
+    saveSettings();
+    return secretId;
 }
 
-async function switchProfileByName(profileName) {
-    const context = getContext();
-    const command = context.SlashCommandParser?.commands?.['profile'];
+async function runCommand(name, args, value) {
+    const command = getContext().SlashCommandParser?.commands?.[name];
     if (!command) {
-        throw new Error('未找到内置 /profile 命令，请先启用 Connection Profiles 扩展。');
+        throw new Error(`当前酒馆缺少 /${name} 命令。`);
     }
-    const switchedName = await command.callback({ await: 'true', timeout: SWITCH_TIMEOUT_MS }, profileName);
-    if (!switchedName) {
-        throw new Error(`切换失败：找不到连接档案「${profileName}」。`);
-    }
-    renderAll();
-    return switchedName;
+    return command.callback(args ?? {}, value ?? '');
 }
 
-async function testProfileById(profileId) {
+async function applyProfileById(profileId) {
     const profile = findProfileById(profileId);
     if (!profile) {
-        throw new Error('找不到这个连接档案。');
+        throw new Error('找不到这个 API 配置。');
     }
-    const shared = await import('../../shared.js');
-    const service = shared.ConnectionManagerRequestService;
-    if (!service?.sendRequest) {
-        throw new Error('当前酒馆版本不支持连接测试服务。');
+    const secretId = await ensureSecret(profile);
+    await runCommand('api', { quiet: 'true' }, 'custom');
+    await runCommand('secret-id', { quiet: 'true', key: SECRET_KEYS.CUSTOM }, secretId);
+    await runCommand('api-url', { api: 'custom', connect: 'true', quiet: 'true' }, normalizeApiUrl(profile.apiUrl));
+    if (profile.model) {
+        await runCommand('model', { quiet: 'true' }, profile.model);
     }
+    const settings = getSettings();
+    settings.activeProfileId = profile.id;
+    saveSettings();
+    renderAll();
+    toastr?.success?.(`已切换到「${profile.name}」`, 'API 连接助手');
+}
+
+async function fetchModelsForProfile(profileId) {
+    const profile = findProfileById(profileId);
+    if (!profile) {
+        throw new Error('找不到这个 API 配置。');
+    }
+    if (!profile.apiKey) {
+        throw new Error('请先在设置里填写密钥。');
+    }
+    const modelsUrl = `${normalizeApiUrl(profile.apiUrl)}/models`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     const startedAt = performance.now();
     try {
-        await service.sendRequest(profileId, TEST_PROMPT, TEST_MAX_TOKENS, {
-            stream: false,
+        const response = await fetch(modelsUrl, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${profile.apiKey}` },
             signal: controller.signal,
-            extractData: true,
-            includePreset: false,
-            includeInstruct: false,
         });
-        return {
+        if (!response.ok) {
+            throw new Error(`站点返回 HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const models = Array.isArray(data?.data)
+            ? data.data.map((item) => item?.id).filter((id) => typeof id === 'string' && id.length > 0)
+            : [];
+        profile.models = models;
+        profile.lastTest = {
             ok: true,
             latencyMs: Math.round(performance.now() - startedAt),
-            message: '连接成功',
+            message: models.length > 0 ? `连接成功，${models.length} 个模型` : '连接成功（站点未返回模型列表）',
             testedAt: Date.now(),
         };
+        saveSettings();
+        return models;
     } catch (error) {
-        const reason = error?.cause?.message ?? error?.message ?? '未知错误';
-        return {
+        const latencyMs = Math.round(performance.now() - startedAt);
+        const isNetworkError = error instanceof TypeError;
+        const reason = isNetworkError
+            ? '无法访问站点：可能是跨域限制或网络问题'
+            : (error?.name === 'AbortError' ? `超过 ${FETCH_TIMEOUT_MS / 1000} 秒未响应` : (error?.message ?? String(error)));
+        profile.lastTest = {
             ok: false,
-            latencyMs: Math.round(performance.now() - startedAt),
-            message: `连接失败：${reason}`,
+            latencyMs,
+            message: reason,
             testedAt: Date.now(),
         };
+        saveSettings();
+        throw new Error(reason);
     } finally {
         clearTimeout(timeoutId);
     }
 }
 
-async function runTest(profileId, button) {
+async function runFetchModels(profileId, button) {
     const originalText = button.textContent;
     button.disabled = true;
-    button.textContent = '测试中…';
+    button.textContent = '拉取中…';
     try {
-        const result = await testProfileById(profileId);
-        const settings = getSettings();
-        settings.testResults[profileId] = result;
-        saveSettings();
+        await fetchModelsForProfile(profileId);
         renderAll();
-        if (!result.ok) {
-            toastr?.warning?.(result.message, 'API 连接测试');
+        if (editorProfileId === profileId) {
+            editorModelChoices = findProfileById(profileId)?.models ?? [];
+            renderEditorModelChoices();
         }
     } catch (error) {
-        toastr?.error?.(error?.message ?? String(error), 'API 连接测试');
+        renderAll();
+        toastr?.warning?.(error?.message ?? String(error), 'API 连接测试');
     } finally {
         button.disabled = false;
         button.textContent = originalText;
     }
 }
 
-function renderProfileRow(profile, isActive) {
-    const activeClass = isActive ? ' is-active' : '';
-    return `
-        <div class="aca-profile-row${activeClass}" data-profile-id="${escapeHtml(profile.id)}">
-            <span class="aca-profile-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</span>
-            <span class="aca-profile-meta" title="${escapeHtml(getProfileHint(profile))}">${escapeHtml(getProfileHint(profile))}</span>
-            ${getResultBadge(profile.id)}
-            <button type="button" class="aca-button menu_button" data-action="test">测试</button>
-        </div>
-    `;
+function getTestBadge(profile) {
+    const result = profile.lastTest;
+    if (!result) {
+        return '<span class="aca-result">未测试</span>';
+    }
+    const className = result.ok ? 'is-ok' : 'is-failed';
+    const title = `${escapeHtml(result.message)}（${escapeHtml(formatTime(result.testedAt))}）`;
+    const latency = `${result.latencyMs}ms`;
+    return `<span class="aca-result ${className}" title="${title}">${result.ok ? '✓' : '✗'} ${latency}</span>`;
 }
 
 function renderSettingsList() {
@@ -168,55 +209,79 @@ function renderSettingsList() {
     if (!container) {
         return;
     }
-    const connectionManager = getConnectionManager();
-    if (!connectionManager) {
-        container.innerHTML = '<div class="aca-description">未检测到内置 Connection Profiles 扩展，请先启用它并创建连接档案。</div>';
+    const settings = getSettings();
+    if (settings.profiles.length === 0) {
+        container.innerHTML = '<div class="aca-empty">还没有 API 配置，点下面的按钮新增。</div>';
         return;
     }
-    const profiles = getProfiles();
-    const selectedProfileId = connectionManager.selectedProfile;
-    if (profiles.length === 0) {
-        container.innerHTML = '<div class="aca-description">还没有连接档案。请先在酒馆自带的 Connection Profiles 里创建一个。</div>';
+    container.innerHTML = settings.profiles.map((profile) => {
+        const activeClass = profile.id === settings.activeProfileId ? ' is-active' : '';
+        return `
+            <div class="aca-profile-row${activeClass}" data-profile-id="${escapeHtml(profile.id)}">
+                <span class="aca-profile-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</span>
+                <span class="aca-profile-meta" title="${escapeHtml(profile.apiUrl)}">${escapeHtml(profile.apiUrl)}</span>
+                <span class="aca-profile-model" title="${escapeHtml(profile.model)}">${escapeHtml(profile.model || '未设模型')}</span>
+                ${getTestBadge(profile)}
+                <button type="button" class="aca-button menu_button" data-action="apply">应用</button>
+                <button type="button" class="aca-button menu_button" data-action="models">拉模型</button>
+                <button type="button" class="aca-button menu_button" data-action="edit">编辑</button>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderEditorModelChoices() {
+    const select = document.getElementById('aca-editor-model-select');
+    if (!select) {
         return;
     }
-    container.innerHTML = profiles
-        .map((profile) => renderProfileRow(profile, profile.id === selectedProfileId))
+    if (editorModelChoices.length === 0) {
+        select.innerHTML = '<option value="">暂无模型列表</option>';
+        return;
+    }
+    const currentModel = document.getElementById('aca-editor-model')?.value ?? '';
+    select.innerHTML = editorModelChoices
+        .map((model) => `<option value="${escapeHtml(model)}"${model === currentModel ? ' selected' : ''}>${escapeHtml(model)}</option>`)
         .join('');
 }
 
 function renderApiEntry() {
-    const entry = document.getElementById('aca-api-entry');
-    if (!entry) {
-        return;
-    }
-    const connectionManager = getConnectionManager();
     const select = document.getElementById('aca-api-select');
-    const result = document.getElementById('aca-api-result');
-    if (!connectionManager || !select || !result) {
+    const status = document.getElementById('aca-api-result');
+    if (!select || !status) {
         return;
     }
-    const profiles = getProfiles();
-    if (profiles.length === 0) {
-        select.innerHTML = '<option value="">暂无连接档案</option>';
-        result.textContent = '';
+    const settings = getSettings();
+    if (settings.profiles.length === 0) {
+        select.innerHTML = '<option value="">暂无 API 配置</option>';
+        status.innerHTML = '';
         return;
     }
-    const selectedProfileId = connectionManager.selectedProfile;
-    select.innerHTML = profiles
-        .map((profile) => {
-            const selected = profile.id === selectedProfileId ? ' selected' : '';
-            return `<option value="${escapeHtml(profile.id)}"${selected}>${escapeHtml(profile.name)}</option>`;
-        })
+    select.innerHTML = settings.profiles
+        .map((profile) => `<option value="${escapeHtml(profile.id)}"${profile.id === settings.activeProfileId ? ' selected' : ''}>${escapeHtml(profile.name)}</option>`)
         .join('');
-    const badge = getSettings().testResults[selectedProfileId];
-    result.innerHTML = badge ? getResultBadge(selectedProfileId) : '';
+    const activeProfile = settings.profiles.find((profile) => profile.id === settings.activeProfileId);
+    status.innerHTML = activeProfile
+        ? `<span class="aca-api-model">${escapeHtml(activeProfile.model || '未设模型')}</span>${getTestBadge(activeProfile)}`
+        : '';
+}
+
+function renderModelChips(profile) {
+    if (!expandedProfileModels.has(profile.id)) {
+        return '';
+    }
+    const models = Array.isArray(profile.models) ? profile.models : [];
+    const chips = models.length > 0
+        ? models.map((model) => `<button type="button" class="aca-model-chip" data-model="${escapeHtml(model)}" title="${escapeHtml(model)}">${escapeHtml(model)}</button>`).join('')
+        : '<span class="aca-empty">还没有模型列表，点「拉」先获取。</span>';
+    return `<div class="aca-model-chips">${chips}</div>`;
 }
 
 function renderFloatWindow() {
-    const list = document.getElementById('aca-float-list');
     const ball = document.getElementById('aca-float-ball');
     const floatRoot = document.getElementById('aca-float-root');
-    if (!list || !ball || !floatRoot) {
+    const list = document.getElementById('aca-float-list');
+    if (!ball || !floatRoot || !list) {
         return;
     }
     const settings = getSettings();
@@ -226,34 +291,190 @@ function renderFloatWindow() {
     if (!enabled) {
         return;
     }
-    const connectionManager = getConnectionManager();
-    if (!connectionManager) {
-        list.innerHTML = '<div>未检测到 Connection Profiles</div>';
+    const position = settings.floatWindowPosition;
+    if (position && Number.isFinite(position.x) && Number.isFinite(position.y)) {
+        floatRoot.style.left = `${Math.max(0, position.x)}px`;
+        floatRoot.style.top = `${Math.max(0, position.y)}px`;
+        floatRoot.style.right = 'auto';
+    }
+    if (settings.profiles.length === 0) {
+        list.innerHTML = '<div class="aca-empty">暂无 API 配置</div>';
         return;
     }
-    const profiles = getProfiles();
-    const selectedProfileId = connectionManager.selectedProfile;
-    if (profiles.length === 0) {
-        list.innerHTML = '<div>暂无连接档案</div>';
-        return;
-    }
-    list.innerHTML = profiles
-        .map((profile) => {
-            const activeClass = profile.id === selectedProfileId ? ' is-active' : '';
-            return `
-                <div class="aca-float-item${activeClass}" data-profile-id="${escapeHtml(profile.id)}">
-                    <button type="button" class="aca-float-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</button>
-                    <button type="button" class="aca-button menu_button" data-action="test">测</button>
-                </div>
-            `;
-        })
-        .join('');
+    list.innerHTML = settings.profiles.map((profile) => `
+        <div class="aca-float-item${profile.id === settings.activeProfileId ? ' is-active' : ''}" data-profile-id="${escapeHtml(profile.id)}">
+            <div class="aca-float-row">
+                <button type="button" class="aca-float-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</button>
+                <span class="aca-float-model" title="${escapeHtml(profile.model)}">${escapeHtml(profile.model || '未设模型')}</span>
+                <button type="button" class="aca-button menu_button" data-action="models" title="展开/收起模型">模</button>
+                <button type="button" class="aca-button menu_button" data-action="fetch" title="拉取模型">拉</button>
+            </div>
+            ${renderModelChips(profile)}
+        </div>
+    `).join('');
 }
 
 function renderAll() {
     renderSettingsList();
     renderApiEntry();
     renderFloatWindow();
+}
+
+function openEditor(profileId) {
+    editorProfileId = profileId;
+    const editor = document.getElementById('aca-editor');
+    if (!editor) {
+        return;
+    }
+    const profile = profileId ? findProfileById(profileId) : null;
+    editorModelChoices = profile?.models ?? [];
+    document.getElementById('aca-editor-title').textContent = profile ? `编辑：${profile.name}` : '新增 API 配置';
+    document.getElementById('aca-editor-name').value = profile?.name ?? '';
+    document.getElementById('aca-editor-url').value = profile?.apiUrl ?? '';
+    document.getElementById('aca-editor-key').value = '';
+    document.getElementById('aca-editor-key').placeholder = profile ? '留空表示不修改密钥' : 'sk-...';
+    document.getElementById('aca-editor-model').value = profile?.model ?? '';
+    document.getElementById('aca-editor-note').value = profile?.note ?? '';
+    document.getElementById('aca-editor-delete').classList.toggle('hidden', !profile);
+    renderEditorModelChoices();
+    showStatus('');
+    editor.classList.remove('hidden');
+}
+
+function closeEditor() {
+    editorProfileId = null;
+    editorModelChoices = [];
+    document.getElementById('aca-editor')?.classList.add('hidden');
+}
+
+async function saveEditor() {
+    const name = document.getElementById('aca-editor-name')?.value?.trim();
+    const apiUrl = normalizeApiUrl(document.getElementById('aca-editor-url')?.value);
+    const apiKey = document.getElementById('aca-editor-key')?.value?.trim();
+    const model = document.getElementById('aca-editor-model')?.value?.trim();
+    const note = document.getElementById('aca-editor-note')?.value?.trim();
+    if (!name) {
+        showStatus('请填写配置名称。', true);
+        return;
+    }
+    if (!apiUrl) {
+        showStatus('请填写 API 地址。', true);
+        return;
+    }
+    if (!/^https?:\/\//i.test(apiUrl)) {
+        showStatus('API 地址必须以 http:// 或 https:// 开头。', true);
+        return;
+    }
+    const settings = getSettings();
+    let profile = editorProfileId ? findProfileById(editorProfileId) : null;
+    try {
+        if (!profile) {
+            if (!apiKey) {
+                showStatus('新增配置时必须填写密钥。', true);
+                return;
+            }
+            profile = {
+                id: crypto.randomUUID(),
+                name,
+                apiUrl,
+                apiKey,
+                secretId: null,
+                model,
+                models: [],
+                note,
+                lastTest: null,
+            };
+            settings.profiles.push(profile);
+            await ensureSecret(profile);
+        } else {
+            profile.name = name;
+            profile.apiUrl = apiUrl;
+            profile.model = model;
+            profile.note = note;
+            if (apiKey) {
+                const oldSecretId = profile.secretId;
+                profile.apiKey = apiKey;
+                profile.secretId = null;
+                await ensureSecret(profile);
+                if (oldSecretId && oldSecretId !== profile.secretId) {
+                    await deleteSecret(SECRET_KEYS.CUSTOM, oldSecretId);
+                }
+            }
+        }
+        saveSettings();
+        closeEditor();
+        renderAll();
+        toastr?.success?.(`已保存「${profile.name}」`, 'API 连接助手');
+    } catch (error) {
+        showStatus(error?.message ?? String(error), true);
+    }
+}
+
+async function deleteProfileById(profileId) {
+    const profile = findProfileById(profileId);
+    if (!profile) {
+        return;
+    }
+    if (!window.confirm(`确定删除「${profile.name}」吗？这会同时删除它在酒馆密钥库中的密钥。`)) {
+        return;
+    }
+    try {
+        if (profile.secretId) {
+            await deleteSecret(SECRET_KEYS.CUSTOM, profile.secretId);
+        }
+    } catch (error) {
+        toastr?.warning?.(`删除密钥失败：${error?.message ?? String(error)}`, 'API 连接助手');
+    }
+    const settings = getSettings();
+    settings.profiles = settings.profiles.filter((item) => item.id !== profileId);
+    if (settings.activeProfileId === profileId) {
+        settings.activeProfileId = null;
+    }
+    expandedProfileModels.delete(profileId);
+    saveSettings();
+    closeEditor();
+    renderAll();
+}
+
+function makeFloatWindowDraggable(floatRoot) {
+    const header = floatRoot.querySelector('.aca-float-header');
+    if (!header) {
+        return;
+    }
+    let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+    header.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button')) {
+            return;
+        }
+        const rect = floatRoot.getBoundingClientRect();
+        offsetX = event.clientX - rect.left;
+        offsetY = event.clientY - rect.top;
+        dragging = true;
+        header.setPointerCapture(event.pointerId);
+    });
+    header.addEventListener('pointermove', (event) => {
+        if (!dragging) {
+            return;
+        }
+        const x = Math.min(Math.max(0, event.clientX - offsetX), Math.max(0, window.innerWidth - floatRoot.offsetWidth));
+        const y = Math.min(Math.max(0, event.clientY - offsetY), Math.max(0, window.innerHeight - floatRoot.offsetHeight));
+        floatRoot.style.left = `${x}px`;
+        floatRoot.style.top = `${y}px`;
+        floatRoot.style.right = 'auto';
+    });
+    header.addEventListener('pointerup', (event) => {
+        if (!dragging) {
+            return;
+        }
+        dragging = false;
+        header.releasePointerCapture(event.pointerId);
+        const rect = floatRoot.getBoundingClientRect();
+        const settings = getSettings();
+        settings.floatWindowPosition = { x: rect.left, y: rect.top };
+        saveSettings();
+    });
 }
 
 function createFloatWindow() {
@@ -267,26 +488,23 @@ function createFloatWindow() {
         document.getElementById('aca-float-root')?.classList.toggle('hidden');
     });
 
-    const root = document.createElement('div');
-    root.id = 'aca-float-root';
-    root.dataset.extensionId = MODULE_ID;
-    root.classList.add('hidden');
-    root.innerHTML = `
+    const floatRoot = document.createElement('div');
+    floatRoot.id = 'aca-float-root';
+    floatRoot.dataset.extensionId = MODULE_ID;
+    floatRoot.classList.add('hidden');
+    floatRoot.innerHTML = `
         <div class="aca-float-header">
-            <span>API 快切</span>
+            <span>API 快切（可拖动）</span>
             <button type="button" class="aca-float-close" title="收起">×</button>
         </div>
         <div id="aca-float-list"></div>
     `;
-    root.querySelector('.aca-float-close')?.addEventListener('click', () => {
-        root.classList.add('hidden');
+    floatRoot.querySelector('.aca-float-close')?.addEventListener('click', () => {
+        floatRoot.classList.add('hidden');
     });
-    root.addEventListener('click', async (event) => {
+    floatRoot.addEventListener('click', async (event) => {
         const button = event.target.closest('button');
-        if (!button) {
-            return;
-        }
-        const item = button.closest('.aca-float-item');
+        const item = event.target.closest('.aca-float-item');
         if (!item) {
             return;
         }
@@ -295,20 +513,40 @@ function createFloatWindow() {
         if (!profile) {
             return;
         }
-        if (button.classList.contains('aca-float-name')) {
+        if (button?.classList.contains('aca-float-name')) {
             try {
-                await switchProfileByName(profile.name);
+                await applyProfileById(profileId);
             } catch (error) {
                 toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
             }
             return;
         }
-        if (button.dataset.action === 'test') {
-            await runTest(profileId, button);
+        if (button?.classList.contains('aca-model-chip')) {
+            const model = button.dataset.model;
+            profile.model = model;
+            saveSettings();
+            try {
+                await applyProfileById(profileId);
+            } catch (error) {
+                toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+            }
+            return;
+        }
+        if (button?.dataset.action === 'models') {
+            if (expandedProfileModels.has(profileId)) {
+                expandedProfileModels.delete(profileId);
+            } else {
+                expandedProfileModels.add(profileId);
+            }
+            renderFloatWindow();
+            return;
+        }
+        if (button?.dataset.action === 'fetch') {
+            await runFetchModels(profileId, button);
         }
     });
-
-    document.body.append(ball, root);
+    makeFloatWindowDraggable(floatRoot);
+    document.body.append(ball, floatRoot);
 }
 
 function createApiEntry() {
@@ -324,29 +562,28 @@ function createApiEntry() {
         <div class="aca-api-title">API 连接助手</div>
         <div class="aca-api-controls">
             <select id="aca-api-select"></select>
-            <button type="button" id="aca-api-switch" class="aca-button menu_button">切换</button>
-            <button type="button" id="aca-api-test" class="aca-button menu_button">测试</button>
+            <button type="button" id="aca-api-apply" class="aca-button menu_button">应用</button>
+            <button type="button" id="aca-api-fetch" class="aca-button menu_button">拉模型</button>
             <span id="aca-api-result"></span>
         </div>
     `;
-    entry.querySelector('#aca-api-switch')?.addEventListener('click', async () => {
-        const profileId = document.getElementById('aca-api-select')?.value;
-        const profile = findProfileById(profileId);
-        if (!profile) {
-            return;
-        }
-        try {
-            await switchProfileByName(profile.name);
-        } catch (error) {
-            toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
-        }
-    });
-    entry.querySelector('#aca-api-test')?.addEventListener('click', async (event) => {
+    entry.querySelector('#aca-api-apply')?.addEventListener('click', async () => {
         const profileId = document.getElementById('aca-api-select')?.value;
         if (!profileId) {
             return;
         }
-        await runTest(profileId, event.currentTarget);
+        try {
+            await applyProfileById(profileId);
+        } catch (error) {
+            toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+        }
+    });
+    entry.querySelector('#aca-api-fetch')?.addEventListener('click', async (event) => {
+        const profileId = document.getElementById('aca-api-select')?.value;
+        if (!profileId) {
+            return;
+        }
+        await runFetchModels(profileId, event.currentTarget);
     });
     anchor.after(entry);
 }
@@ -374,8 +611,30 @@ async function onActivate() {
             renderFloatWindow();
         });
     }
+    document.getElementById('aca-add-profile')?.addEventListener('click', () => openEditor(null));
+    document.getElementById('aca-editor-save')?.addEventListener('click', saveEditor);
+    document.getElementById('aca-editor-cancel')?.addEventListener('click', closeEditor);
+    document.getElementById('aca-editor-delete')?.addEventListener('click', () => {
+        if (editorProfileId) {
+            deleteProfileById(editorProfileId);
+        }
+    });
+    document.getElementById('aca-editor-fetch-models')?.addEventListener('click', async (event) => {
+        const profileId = editorProfileId;
+        if (!profileId) {
+            showStatus('请先保存配置，再拉取模型列表。', true);
+            return;
+        }
+        await runFetchModels(profileId, event.currentTarget);
+    });
+    document.getElementById('aca-editor-model-select')?.addEventListener('change', (event) => {
+        const modelInput = document.getElementById('aca-editor-model');
+        if (modelInput && event.target.value) {
+            modelInput.value = event.target.value;
+        }
+    });
     document.getElementById('aca-profile-list')?.addEventListener('click', async (event) => {
-        const button = event.target.closest('button[data-action="test"]');
+        const button = event.target.closest('button[data-action]');
         if (!button) {
             return;
         }
@@ -383,7 +642,21 @@ async function onActivate() {
         if (!profileId) {
             return;
         }
-        await runTest(profileId, button);
+        if (button.dataset.action === 'apply') {
+            try {
+                await applyProfileById(profileId);
+            } catch (error) {
+                toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+            }
+            return;
+        }
+        if (button.dataset.action === 'models') {
+            await runFetchModels(profileId, button);
+            return;
+        }
+        if (button.dataset.action === 'edit') {
+            openEditor(profileId);
+        }
     });
     renderAll();
 }
@@ -396,5 +669,3 @@ function onDisable() {
 }
 
 export { onActivate, onDisable };
-
-

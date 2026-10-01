@@ -13,23 +13,37 @@
       "fallback": null
     },
     {
-      "id": "connection-manager-settings",
+      "id": "slash-command-api",
       "owner": "sillytavern",
-      "symbol": "extensionSettings.connectionManager",
+      "symbol": "SlashCommandParser.commands.api",
       "required": true,
       "fallback": null
     },
     {
-      "id": "slash-command-profile",
+      "id": "slash-command-api-url",
       "owner": "sillytavern",
-      "symbol": "SlashCommandParser.commands.profile",
+      "symbol": "SlashCommandParser.commands.api-url",
       "required": true,
       "fallback": null
     },
     {
-      "id": "connection-manager-request-service",
+      "id": "slash-command-model",
       "owner": "sillytavern",
-      "symbol": "ConnectionManagerRequestService.sendRequest",
+      "symbol": "SlashCommandParser.commands.model",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "slash-command-secret-id",
+      "owner": "sillytavern",
+      "symbol": "SlashCommandParser.commands.secret-id",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "secrets-write",
+      "owner": "sillytavern",
+      "symbol": "public/scripts/secrets.js writeSecret",
       "required": true,
       "fallback": null
     },
