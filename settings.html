@@ -6,16 +6,66 @@
         </div>
         <div class="inline-drawer-content">
             <p class="aca-description">
-                管理自己的 API 配置（名称 + 地址 + 密钥）。切换时只修改 API 连接，不会改动补全预设。
-                密钥保存在酒馆原生密钥库与本机扩展数据中，不会导出、不随角色卡走。本插件不会发送任何消耗额度的请求。
+                按「站点」管理 API 连接：名称 + 网址 + 密钥 + 模型列表整体保存，一键切换。切换只改 API 连接，不动补全预设。
             </p>
-            <label class="checkbox_label">
-                <input id="aca-float-window-enabled" type="checkbox">
-                <span>启用悬浮快切窗（闪电球与窗口均可拖动）</span>
-            </label>
-            <div id="aca-profile-list" class="aca-profile-list"></div>
+            <div class="aca-switches">
+                <label class="checkbox_label">
+                    <input id="aca-float-window-enabled" type="checkbox">
+                    <span>启用悬浮快切窗（可拖动，位置自动记忆）</span>
+                </label>
+                <label class="checkbox_label">
+                    <input id="aca-auto-sync" type="checkbox">
+                    <span>使用站点后自动同步到快切窗</span>
+                </label>
+            </div>
+            <div id="aca-group-filter" class="aca-group-filter"></div>
+            <div id="aca-site-list" class="aca-site-list"></div>
             <div class="aca-settings-actions">
-                <button type="button" id="aca-add-profile" class="menu_button">新增 API 配置</button>
+                <button type="button" id="aca-add-site" class="aca-primary-button">＋ 新增站点</button>
+            </div>
+
+            <div id="aca-editor" class="aca-editor hidden">
+                <div class="aca-editor-title" id="aca-editor-title">新增站点</div>
+                <label class="aca-field">
+                    <span>名称（如：OpenRouter）</span>
+                    <input type="text" id="aca-editor-name" placeholder="名称（如：OpenRouter）">
+                </label>
+                <label class="aca-field">
+                    <span>API URL（https://.../v1）</span>
+                    <input type="text" id="aca-editor-url" placeholder="https://.../v1">
+                </label>
+                <label class="aca-field">
+                    <span>API Key（可多个：换行 / 逗号分隔，首个为默认）</span>
+                    <textarea id="aca-editor-key" rows="2" placeholder="sk-...（新增时为必填；编辑时留空表示不修改）"></textarea>
+                </label>
+                <label class="aca-field">
+                    <span>模型 ID（可多个：换行 / 逗号分隔，首个为默认）</span>
+                    <textarea id="aca-editor-models" rows="2" placeholder="model-id&#10;another-model-id"></textarea>
+                </label>
+                <div class="aca-editor-row">
+                    <label class="aca-field aca-field-grow">
+                        <span>分组</span>
+                        <select id="aca-editor-group"></select>
+                    </label>
+                    <button type="button" id="aca-editor-new-group" class="aca-ghost-button">＋ 新分组</button>
+                    <button type="button" id="aca-editor-fetch-models" class="aca-ghost-button">☰ 获取模型</button>
+                </div>
+                <div class="aca-editor-actions">
+                    <button type="button" id="aca-editor-save" class="aca-primary-button">＋ 保存站点</button>
+                    <button type="button" id="aca-editor-cancel" class="aca-ghost-button">取消</button>
+                    <button type="button" id="aca-editor-delete" class="aca-ghost-button aca-danger">删除</button>
+                </div>
+                <div id="aca-editor-status" class="aca-editor-status"></div>
+            </div>
+
+            <div class="aca-io-row">
+                <label class="checkbox_label aca-io-checkbox">
+                    <input id="aca-export-keys" type="checkbox">
+                    <span>导出时包含密钥</span>
+                </label>
+                <button type="button" id="aca-export" class="aca-ghost-button">⇩ 导出</button>
+                <button type="button" id="aca-import" class="aca-ghost-button">⇧ 导入</button>
+                <input type="file" id="aca-import-file" accept="application/json,.json" class="hidden">
             </div>
         </div>
     </div>

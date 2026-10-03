@@ -2,124 +2,285 @@
     contain: content;
 }
 
-/* ===== 淡蓝色毛玻璃基底 ===== */
-.aca-glass,
-#aca-float-root,
-.aca-modal {
-    background: linear-gradient(135deg, rgba(214, 234, 248, 0.72), rgba(190, 219, 240, 0.58));
-    backdrop-filter: blur(14px) saturate(1.35);
-    -webkit-backdrop-filter: blur(14px) saturate(1.35);
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    box-shadow: 0 8px 32px rgba(96, 149, 191, 0.28);
-    color: #24425c;
+#aca-settings-root {
+    --aca-glass-bg: rgba(102, 158, 235, 0.14);
+    --aca-glass-bg-strong: rgba(102, 158, 235, 0.22);
+    --aca-glass-border: rgba(150, 200, 255, 0.30);
+    --aca-glass-border-strong: rgba(130, 205, 255, 0.75);
+    --aca-text: inherit;
+    --aca-muted: rgba(190, 215, 245, 0.75);
+    --aca-ok: #7bd88f;
+    --aca-bad: #ff9a9a;
 }
 
-/* ===== 扩展设置面板 ===== */
 .aca-description {
     font-size: 0.9em;
     opacity: 0.85;
-    margin: 0 0 0.5em;
+    margin: 0.1em 0 0.6em;
 }
 
-.aca-profile-list {
+.aca-switches {
     display: flex;
     flex-direction: column;
-    gap: 0.35em;
-    margin-top: 0.5em;
+    gap: 0.25em;
+    margin-bottom: 0.6em;
 }
 
-.aca-profile-row {
+.aca-group-filter {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.35em;
+    margin-bottom: 0.6em;
+}
+
+.aca-group-chip {
+    padding: 0.2em 0.7em;
+    border-radius: 999px;
+    border: 1px solid var(--aca-glass-border);
+    background: var(--aca-glass-bg);
+    cursor: pointer;
+    font-size: 0.85em;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.aca-group-chip.is-active {
+    border-color: var(--aca-glass-border-strong);
+    background: var(--aca-glass-bg-strong);
+    box-shadow: 0 0 10px rgba(110, 190, 255, 0.35);
+}
+
+.aca-site-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+    margin-bottom: 0.7em;
+}
+
+.aca-site-card {
+    padding: 0.6em 0.7em;
+    border-radius: 0.9em;
+    background: var(--aca-glass-bg);
+    border: 1px solid var(--aca-glass-border);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    box-shadow: 0 6px 20px rgba(20, 50, 110, 0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+}
+
+.aca-site-card.is-active {
+    border-color: var(--aca-glass-border-strong);
+    box-shadow: 0 0 16px rgba(110, 190, 255, 0.35), 0 6px 20px rgba(20, 50, 110, 0.25);
+}
+
+.aca-site-badges {
+    display: flex;
+    gap: 0.35em;
+    flex-wrap: wrap;
+}
+
+.aca-badge {
+    font-size: 0.72em;
+    letter-spacing: 0.03em;
+    padding: 0.15em 0.6em;
+    border-radius: 999px;
+    background: rgba(120, 180, 255, 0.20);
+    border: 1px solid var(--aca-glass-border);
+    white-space: nowrap;
+}
+
+.aca-badge.is-ok {
+    color: var(--aca-ok);
+    border-color: rgba(123, 216, 143, 0.4);
+}
+
+.aca-badge.is-off {
+    color: var(--aca-bad);
+    border-color: rgba(255, 154, 154, 0.4);
+}
+
+.aca-site-models {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+}
+
+.aca-site-model {
+    text-align: left;
+    padding: 0.4em 0.7em;
+    border-radius: 0.6em;
+    border: 1px solid var(--aca-glass-border);
+    background: var(--aca-glass-bg);
+    color: var(--aca-text);
+    cursor: pointer;
+    font-size: 0.92em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.aca-site-model:hover {
+    border-color: var(--aca-glass-border-strong);
+}
+
+.aca-site-model.is-active {
+    border-color: var(--aca-glass-border-strong);
+    background: var(--aca-glass-bg-strong);
+    box-shadow: 0 0 12px rgba(110, 190, 255, 0.3);
+}
+
+.aca-site-meta {
+    display: flex;
+    gap: 1em;
+    font-size: 0.78em;
+    color: var(--aca-muted);
+}
+
+.aca-site-actions {
+    display: flex;
+    gap: 0.35em;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.4em;
-    padding: 0.4em 0.5em;
-    border-radius: 0.55em;
-    background: rgba(214, 234, 248, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
-.aca-profile-row.is-active {
-    outline: 2px solid rgba(97, 158, 212, 0.75);
-}
-
-.aca-profile-name {
-    flex: 1;
-    min-width: 4em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.aca-action-primary,
+.aca-primary-button {
+    padding: 0.35em 0.9em;
+    border-radius: 0.6em;
+    border: 1px solid rgba(150, 220, 255, 0.55);
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.85), rgba(99, 102, 241, 0.85));
+    color: #f2f8ff;
     font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(56, 140, 248, 0.35);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
-.aca-profile-meta {
-    flex: 2;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    opacity: 0.7;
-    font-size: 0.85em;
+.aca-action-primary:hover,
+.aca-primary-button:hover {
+    box-shadow: 0 6px 20px rgba(56, 160, 255, 0.55);
 }
 
-.aca-profile-model,
-.aca-float-model,
-.aca-api-model {
-    max-width: 10em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.aca-action-button,
+.aca-ghost-button {
+    padding: 0.35em 0.7em;
+    border-radius: 0.6em;
+    border: 1px solid var(--aca-glass-border);
+    background: var(--aca-glass-bg);
+    color: var(--aca-text);
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.aca-action-button:hover,
+.aca-ghost-button:hover {
+    border-color: var(--aca-glass-border-strong);
+}
+
+.aca-settings-actions {
+    margin-bottom: 0.6em;
+}
+
+.aca-editor {
+    padding: 0.7em;
+    border-radius: 0.9em;
+    background: var(--aca-glass-bg);
+    border: 1px solid var(--aca-glass-border);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.55em;
+    box-shadow: 0 6px 20px rgba(20, 50, 110, 0.18);
+}
+
+.aca-editor.hidden,
+.hidden {
+    display: none;
+}
+
+.aca-editor-title {
+    font-weight: 700;
+    font-size: 1.05em;
+}
+
+.aca-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    font-size: 0.88em;
+}
+
+.aca-field > span {
+    opacity: 0.8;
+}
+
+.aca-field-grow {
+    flex: 1;
+}
+
+.aca-editor-row {
+    display: flex;
+    gap: 0.4em;
+    align-items: flex-end;
+}
+
+.aca-editor-actions {
+    display: flex;
+    gap: 0.4em;
+    flex-wrap: wrap;
+}
+
+.aca-editor-status {
     font-size: 0.85em;
-    opacity: 0.85;
+    min-height: 1.2em;
+}
+
+.aca-editor-status.is-error {
+    color: var(--aca-bad);
+}
+
+.aca-danger {
+    color: var(--aca-bad);
 }
 
 .aca-empty {
     font-size: 0.85em;
     opacity: 0.75;
+    padding: 0.4em 0;
 }
 
-.aca-button {
-    padding: 0.2em 0.55em;
-    border-radius: 0.45em;
-    cursor: pointer;
-    white-space: nowrap;
-    border: 1px solid rgba(97, 158, 212, 0.4);
-    background: rgba(255, 255, 255, 0.45);
-    color: #24425c;
-    transition: background 0.15s ease, box-shadow 0.15s ease;
+.aca-io-row {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 0.4em;
 }
 
-.aca-button:hover {
-    background: rgba(255, 255, 255, 0.75);
-    box-shadow: 0 2px 8px rgba(97, 158, 212, 0.25);
+.aca-io-checkbox {
+    margin-right: auto;
 }
 
-.aca-primary {
-    background: linear-gradient(135deg, rgba(97, 158, 212, 0.85), rgba(120, 180, 230, 0.85));
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-.aca-primary:hover {
-    background: linear-gradient(135deg, rgba(80, 145, 200, 0.95), rgba(105, 165, 220, 0.95));
-}
-
-.aca-danger {
-    color: #b04040;
-}
-
-/* ===== API 面板入口 ===== */
 #aca-api-entry {
     margin: 0.5em 0;
-    padding: 0.6em;
-    border-radius: 0.6em;
-    background: linear-gradient(135deg, rgba(214, 234, 248, 0.55), rgba(190, 219, 240, 0.4));
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    padding: 0.55em;
+    border-radius: 0.7em;
+    background: rgba(102, 158, 235, 0.14);
+    border: 1px solid rgba(150, 200, 255, 0.3);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 #aca-api-entry .aca-api-title {
     font-weight: 700;
     margin-bottom: 0.35em;
-    color: #24425c;
 }
 
 #aca-api-entry .aca-api-controls {
@@ -134,44 +295,45 @@
     min-width: 8em;
 }
 
-/* ===== 闪电球（可拖动） ===== */
 #aca-float-ball {
     position: fixed;
     right: 1.1em;
     top: 40%;
-    left: auto;
-    z-index: 10010;
+    z-index: 10000;
     width: 2.6em;
     height: 2.6em;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.75), rgba(140, 190, 230, 0.75));
-    backdrop-filter: blur(10px) saturate(1.3);
-    -webkit-backdrop-filter: blur(10px) saturate(1.3);
-    color: #2a5a8c;
+    border: 1px solid rgba(150, 220, 255, 0.5);
+    background: rgba(40, 90, 160, 0.55);
+    color: #eaf5ff;
     cursor: grab;
-    font-size: 1em;
-    box-shadow: 0 4px 16px rgba(96, 149, 191, 0.45);
+    font-size: 1.05em;
+    box-shadow: 0 0 14px rgba(90, 180, 255, 0.5), 0 4px 10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     touch-action: none;
-    user-select: none;
 }
 
 #aca-float-ball:active {
     cursor: grabbing;
 }
 
-/* ===== 悬浮窗（可拖动 + 毛玻璃） ===== */
 #aca-float-root {
     position: fixed;
     right: 1.1em;
-    top: calc(40% + 3.2em);
+    top: calc(40% + 3em);
     z-index: 10000;
-    width: min(23em, 85vw);
+    width: min(22em, 85vw);
     max-height: 60vh;
     overflow: auto;
-    padding: 0.7em;
-    border-radius: 0.8em;
-    cursor: default;
+    padding: 0.6em;
+    border-radius: 0.9em;
+    background: rgba(38, 78, 140, 0.45);
+    border: 1px solid rgba(150, 200, 255, 0.35);
+    color: #eaf5ff;
+    box-shadow: 0 8px 28px rgba(10, 30, 70, 0.45), 0 0 18px rgba(90, 180, 255, 0.22) inset;
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
 }
 
 #aca-float-root.hidden,
@@ -188,8 +350,8 @@
     cursor: grab;
     user-select: none;
     touch-action: none;
-    padding: 0.1em 0.2em;
-    border-radius: 0.4em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid rgba(150, 200, 255, 0.25);
 }
 
 #aca-float-root .aca-float-header:active {
@@ -200,9 +362,8 @@
     border: none;
     background: transparent;
     color: inherit;
-    font-size: 1.05em;
+    font-size: 1em;
     cursor: pointer;
-    padding: 0 0.3em;
 }
 
 #aca-float-list {
@@ -213,11 +374,11 @@
 
 #aca-float-list .aca-float-item {
     border-radius: 0.5em;
-    padding: 0.2em;
+    padding: 0.15em;
 }
 
 #aca-float-list .aca-float-item.is-active {
-    outline: 2px solid rgba(97, 158, 212, 0.75);
+    outline: 1px solid rgba(130, 205, 255, 0.7);
 }
 
 #aca-float-list .aca-float-row {
@@ -233,21 +394,28 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 0.32em 0.55em;
-    border-radius: 0.45em;
-    border: 1px solid rgba(97, 158, 212, 0.35);
-    background: rgba(255, 255, 255, 0.5);
-    color: #24425c;
-    font-weight: 600;
+    padding: 0.3em 0.5em;
+    border-radius: 0.4em;
+    border: 1px solid rgba(150, 200, 255, 0.3);
+    background: rgba(70, 120, 190, 0.35);
+    color: inherit;
     cursor: pointer;
-    transition: background 0.15s ease;
 }
 
-#aca-float-list .aca-float-name:hover {
-    background: rgba(255, 255, 255, 0.8);
+.aca-float-model {
+    max-width: 10em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
+    opacity: 0.9;
 }
 
-/* ===== 模型按钮 ===== */
+#aca-float-list .aca-action-button {
+    padding: 0.2em 0.5em;
+    font-size: 0.85em;
+}
+
 .aca-model-chips {
     display: flex;
     flex-wrap: wrap;
@@ -260,116 +428,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 0.18em 0.55em;
-    border-radius: 0.7em;
-    border: 1px solid rgba(97, 158, 212, 0.45);
-    background: rgba(255, 255, 255, 0.45);
-    color: #2a5a8c;
-    font-size: 0.8em;
+    padding: 0.15em 0.5em;
+    border-radius: 999px;
+    border: 1px solid rgba(120, 180, 255, 0.5);
+    background: rgba(60, 110, 190, 0.45);
+    color: inherit;
+    font-size: 0.78em;
     cursor: pointer;
-    transition: background 0.15s ease;
 }
 
 .aca-model-chip:hover {
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(95, 150, 220, 0.65);
+    box-shadow: 0 0 10px rgba(110, 190, 255, 0.35);
 }
 
-/* ===== 配置弹窗（命名+网址+密钥+保存） ===== */
-#aca-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 10020;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: rgba(60, 100, 135, 0.25);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
-}
-
-#aca-modal-backdrop.is-open {
-    display: flex;
-}
-
-.aca-modal {
-    width: min(24em, 92vw);
-    max-height: 86vh;
-    overflow: auto;
-    padding: 0.9em;
-    border-radius: 0.9em;
-}
-
-.aca-modal-title {
-    font-weight: 700;
-    font-size: 1.05em;
-    margin-bottom: 0.5em;
-    color: #24425c;
-}
-
-.aca-modal-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55em;
-}
-
-.aca-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25em;
-    font-size: 0.92em;
-}
-
-.aca-field > span {
-    opacity: 0.8;
-    font-weight: 600;
-}
-
-.aca-field input,
-.aca-field select {
-    border: 1px solid rgba(97, 158, 212, 0.4);
-    border-radius: 0.45em;
-    padding: 0.35em 0.5em;
-    background: rgba(255, 255, 255, 0.65);
-    color: #24425c;
-}
-
-.aca-field input:focus,
-.aca-field select:focus {
-    outline: 2px solid rgba(97, 158, 212, 0.6);
-    background: rgba(255, 255, 255, 0.85);
-}
-
-.aca-model-controls {
-    display: flex;
-    gap: 0.35em;
-    align-items: center;
-}
-
-.aca-model-controls input {
-    flex: 1;
-    min-width: 6em;
-}
-
-.aca-model-controls select {
-    flex: 2;
-    min-width: 8em;
-}
-
-.aca-modal-actions {
-    display: flex;
-    gap: 0.4em;
-    margin-top: 0.2em;
-}
-
-.aca-modal-status {
+.aca-api-model {
     font-size: 0.85em;
-    min-height: 1.2em;
-}
-
-.aca-modal-status.is-error {
-    color: #b04040;
-}
-
-.hidden {
-    display: none !important;
+    opacity: 0.9;
 }
