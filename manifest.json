@@ -5,8 +5,12 @@
   "js": "index.js",
   "css": "style.css",
   "author": "linkw",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "minimum_client_version": "1.18.0",
+  "i18n": {
+    "zh-cn": "i18n/zh-cn.json",
+    "en": "i18n/en.json"
+  },
   "hooks": {
     "activate": "onActivate",
     "disable": "onDisable"

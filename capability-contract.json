@@ -48,6 +48,20 @@
       "fallback": null
     },
     {
+      "id": "generation-events",
+      "owner": "sillytavern",
+      "symbol": "eventSource.on(eventTypes.GENERATION_STARTED/GENERATION_ENDED)",
+      "required": false,
+      "fallback": "使用统计不可用，切换与管理功能不受影响"
+    },
+    {
+      "id": "i18n-assets",
+      "owner": "dom",
+      "symbol": "fetch(i18n/<lang>.json)",
+      "required": false,
+      "fallback": "语言文件缺失时界面回退为词条键名，功能不受影响"
+    },
+    {
       "id": "api-drawer-block",
       "owner": "dom",
       "symbol": "#rm_api_block",

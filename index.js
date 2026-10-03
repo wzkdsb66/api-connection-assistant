@@ -8,13 +8,129 @@ const DEFAULT_SETTINGS = Object.freeze({
     floatWindowEnabled: false,
     floatWindowPosition: null,
     autoSyncFloat: true,
+    language: 'auto',
 });
 const FETCH_TIMEOUT_MS = 15000;
-const DEFAULT_GROUP_NAME = '未分组';
+const SUPPORTED_LANGUAGES = ['zh-cn', 'en'];
+
 const expandedSiteModels = new Set();
+const languageDictionaries = new Map();
+const attemptedLanguages = new Set();
+let currentLanguage = 'zh-cn';
 let editorSiteId = null;
 let editorModelChoices = [];
 let activeGroupFilter = 'all';
+let pendingGenerationSiteId = null;
+let generationStartedHandler = null;
+let generationEndedHandler = null;
+
+// ---------- i18n ----------
+
+function detectBrowserLanguage() {
+    const lang = String(document.documentElement.lang ?? '').toLowerCase();
+    return lang.startsWith('zh') ? 'zh-cn' : 'en';
+}
+
+function resolveWantedLanguage(settings) {
+    const wanted = settings.language ?? 'auto';
+    if (SUPPORTED_LANGUAGES.includes(wanted)) return wanted;
+    return detectBrowserLanguage();
+}
+
+async function loadLanguage(preferred) {
+    const candidates = [preferred, ...SUPPORTED_LANGUAGES].filter((language) => SUPPORTED_LANGUAGES.includes(language));
+    for (const language of candidates) {
+        if (languageDictionaries.has(language)) return language;
+        if (attemptedLanguages.has(language)) continue;
+        attemptedLanguages.add(language);
+        try {
+            const response = await fetch(new URL(`i18n/${language}.json`, import.meta.url).href);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            languageDictionaries.set(language, await response.json());
+            return language;
+        } catch (error) {
+            console.warn(`[api-connection-assistant] failed to load i18n/${language}.json`, error);
+        }
+    }
+    return null;
+}
+
+function tr(key, vars) {
+    const dictionary = languageDictionaries.get(currentLanguage);
+    let template = dictionary?.[key] ?? key;
+    if (vars) {
+        template = template.replace(/\{(\w+)\}/g, (match, name) => (vars[name] ?? match));
+    }
+    return template;
+}
+
+function toastTitle() {
+    return tr('settings.title');
+}
+
+function applyTranslations(root) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll('[data-tr]').forEach((element) => {
+        element.textContent = tr(element.dataset.tr);
+    });
+    root.querySelectorAll('[data-tr-placeholder]').forEach((element) => {
+        element.placeholder = tr(element.dataset.trPlaceholder);
+    });
+    root.querySelectorAll('[data-tr-title]').forEach((element) => {
+        element.title = tr(element.dataset.trTitle);
+    });
+}
+
+async function applyLanguage() {
+    const settings = getSettings();
+    const loaded = await loadLanguage(resolveWantedLanguage(settings));
+    if (loaded) currentLanguage = loaded;
+    applyTranslations(document.getElementById('aca-settings-root'));
+    renderAll();
+}
+
+// ---------- 适配器层 ----------
+
+const ADAPTERS = {
+    'openai-compatible': {
+        id: 'openai-compatible',
+        async apply(site, secretId) {
+            await runCommand('api', { quiet: 'true' }, 'custom');
+            await runCommand('secret-id', { quiet: 'true', key: SECRET_KEYS.CUSTOM }, secretId);
+            await runCommand('api-url', { api: 'custom', connect: 'true', quiet: 'true' }, normalizeApiUrl(site.apiUrl));
+            if (site.model) await runCommand('model', { quiet: 'true' }, site.model);
+        },
+        async fetchModels(apiUrl, key) {
+            const modelsUrl = `${normalizeApiUrl(apiUrl)}/models`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+            try {
+                const response = await fetch(modelsUrl, {
+                    method: 'GET',
+                    headers: { Authorization: `Bearer ${key}` },
+                    signal: controller.signal,
+                });
+                if (!response.ok) throw new Error(tr('err.http', { n: response.status }));
+                const data = await response.json();
+                return [...new Set(Array.isArray(data?.data)
+                    ? data.data.map((item) => item?.id).filter((id) => typeof id === 'string' && id.length > 0)
+                    : [])];
+            } catch (error) {
+                if (error?.name === 'AbortError') throw new Error(tr('err.timeout', { n: FETCH_TIMEOUT_MS / 1000 }));
+                if (error instanceof TypeError) throw new Error(tr('err.cors'));
+                throw error;
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        },
+    },
+};
+
+function getAdapter(site) {
+    return ADAPTERS[site?.type] ?? ADAPTERS['openai-compatible'];
+}
+
+// ---------- 基础 ----------
 
 function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
@@ -28,16 +144,37 @@ function getSettings() {
     const context = getContext();
     const current = context.extensionSettings[MODULE_ID] ?? {};
     const settings = { ...DEFAULT_SETTINGS, ...current };
+    let changed = false;
     if (!Array.isArray(settings.sites)) settings.sites = [];
     if (!Array.isArray(settings.groups)) settings.groups = [];
     if (!settings.floatWindowPosition || typeof settings.floatWindowPosition !== 'object') settings.floatWindowPosition = null;
+    if (!SUPPORTED_LANGUAGES.includes(settings.language) && settings.language !== 'auto') {
+        settings.language = 'auto';
+        changed = true;
+    }
+    let maxOrder = -1;
     for (const site of settings.sites) {
-        if (!Array.isArray(site.keys)) site.keys = [];
-        if (!Array.isArray(site.secretIds)) site.secretIds = [];
-        if (!Array.isArray(site.models)) site.models = [];
-        if (!Number.isFinite(site.activeKeyIndex)) site.activeKeyIndex = 0;
+        if (!Array.isArray(site.keys)) { site.keys = []; changed = true; }
+        if (!Array.isArray(site.secretIds)) { site.secretIds = []; changed = true; }
+        if (!Array.isArray(site.models)) { site.models = []; changed = true; }
+        if (!Number.isFinite(site.activeKeyIndex)) { site.activeKeyIndex = 0; changed = true; }
+        if (!ADAPTERS[site.type]) {
+            site.type = 'openai-compatible';
+            changed = true;
+        }
+        if (!Number.isFinite(site.usageCount)) { site.usageCount = 0; changed = true; }
+        if (!Number.isFinite(site.lastUsedAt)) { site.lastUsedAt = null; changed = true; }
+        if (Number.isFinite(site.order)) maxOrder = Math.max(maxOrder, site.order);
+    }
+    for (const site of settings.sites) {
+        if (!Number.isFinite(site.order)) {
+            maxOrder += 1;
+            site.order = maxOrder;
+            changed = true;
+        }
     }
     context.extensionSettings[MODULE_ID] = settings;
+    if (changed) saveSettings();
     return settings;
 }
 
@@ -53,10 +190,14 @@ function findSiteById(siteId) {
     return getSites().find((site) => site.id === siteId) ?? null;
 }
 
+function getSortedSites() {
+    return [...getSites()].sort((a, b) => a.order - b.order);
+}
+
 function getGroupName(groupId) {
-    if (!groupId) return DEFAULT_GROUP_NAME;
+    if (!groupId) return tr('group.none');
     const group = getSettings().groups.find((item) => item.id === groupId);
-    return group?.name ?? DEFAULT_GROUP_NAME;
+    return group?.name ?? tr('group.none');
 }
 
 function parseMultiValues(text) {
@@ -80,12 +221,16 @@ function escapeHtml(value) {
 }
 
 function formatTime(timestamp) {
-    if (!timestamp) return '从未使用';
+    if (!timestamp) return tr('meta.never');
     return new Date(timestamp).toLocaleString();
 }
 
 function normalizeApiUrl(apiUrl) {
     return String(apiUrl ?? '').trim().replace(/\/+$/, '');
+}
+
+function nextSiteOrder(sites) {
+    return sites.length > 0 ? Math.max(...sites.map((site) => site.order)) + 1 : 0;
 }
 
 function showStatus(message, isError = false) {
@@ -94,15 +239,17 @@ function showStatus(message, isError = false) {
         status.textContent = message;
         status.classList.toggle('is-error', isError);
     }
-    if (isError) toastr?.error?.(message, 'API 连接助手');
+    if (isError) toastr?.error?.(message, toastTitle());
 }
+
+// ---------- 密钥与切换 ----------
 
 async function ensureKeySecret(site, keyIndex) {
     const key = site.keys?.[keyIndex];
-    if (!key) throw new Error('这个站点缺少密钥，请先编辑填写 API Key。');
+    if (!key) throw new Error(tr('err.noSecretKey'));
     if (site.secretIds?.[keyIndex]) return site.secretIds[keyIndex];
     const secretId = await writeSecret(SECRET_KEYS.CUSTOM, key, `${site.name} #${keyIndex + 1}`);
-    if (!secretId) throw new Error('写入酒馆密钥库失败。');
+    if (!secretId) throw new Error(tr('err.secretWrite'));
     site.secretIds[keyIndex] = secretId;
     saveSettings();
     return secretId;
@@ -110,23 +257,21 @@ async function ensureKeySecret(site, keyIndex) {
 
 async function runCommand(name, args, value) {
     const command = getContext().SlashCommandParser?.commands?.[name];
-    if (!command) throw new Error(`当前酒馆缺少 /${name} 命令。`);
+    if (!command) throw new Error(tr('err.noCommand', { name }));
     return command.callback(args ?? {}, value ?? '');
 }
 
 async function applySite(siteId, model) {
     const site = findSiteById(siteId);
-    if (!site) throw new Error('找不到这个站点。');
+    if (!site) throw new Error(tr('err.noSite'));
     if (site.models.length > 0) {
         site.model = model ?? site.model ?? site.models[0];
     } else if (model) {
         site.model = model;
     }
+    const adapter = getAdapter(site);
     const secretId = await ensureKeySecret(site, site.activeKeyIndex);
-    await runCommand('api', { quiet: 'true' }, 'custom');
-    await runCommand('secret-id', { quiet: 'true', key: SECRET_KEYS.CUSTOM }, secretId);
-    await runCommand('api-url', { api: 'custom', connect: 'true', quiet: 'true' }, normalizeApiUrl(site.apiUrl));
-    if (site.model) await runCommand('model', { quiet: 'true' }, site.model);
+    await adapter.apply(site, secretId);
     site.lastUsedAt = Date.now();
     const settings = getSettings();
     settings.activeSiteId = site.id;
@@ -137,61 +282,42 @@ async function applySite(siteId, model) {
 
 async function rotateKey(siteId) {
     const site = findSiteById(siteId);
-    if (!site) throw new Error('找不到这个站点。');
-    if (site.keys.length < 2) throw new Error('这个站点只有一个密钥。');
+    if (!site) throw new Error(tr('err.noSite'));
+    if (site.keys.length < 2) throw new Error(tr('toast.oneKey'));
     site.activeKeyIndex = (site.activeKeyIndex + 1) % site.keys.length;
     saveSettings();
     await applySite(siteId);
-    toastr?.info?.(`已切换到第 ${site.activeKeyIndex + 1} 把密钥`, 'API 连接助手');
+    toastr?.info?.(tr('toast.rotated', { i: site.activeKeyIndex + 1 }), toastTitle());
 }
 
-async function fetchModels(siteId) {
-    const site = findSiteById(siteId);
-    if (!site) throw new Error('找不到这个站点。');
-    const key = site.keys?.[site.activeKeyIndex];
-    if (!key) throw new Error('请先为站点填写 API Key。');
-    const modelsUrl = `${normalizeApiUrl(site.apiUrl)}/models`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-        const response = await fetch(modelsUrl, {
-            method: 'GET',
-            headers: { Authorization: `Bearer ${key}` },
-            signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(`站点返回 HTTP ${response.status}`);
-        const data = await response.json();
-        const models = uniqueValues(Array.isArray(data?.data)
-            ? data.data.map((item) => item?.id).filter((id) => typeof id === 'string' && id.length > 0)
-            : []);
-        site.models = models;
-        if (site.models.length > 0 && !site.model) site.model = site.models[0];
-        saveSettings();
-        return models;
-    } catch (error) {
-        if (error?.name === 'AbortError') throw new Error(`超过 ${FETCH_TIMEOUT_MS / 1000} 秒未响应`);
-        if (error instanceof TypeError) throw new Error('无法访问站点：可能是跨域限制或网络问题。可手动填写模型 ID。');
-        throw error;
-    } finally {
-        clearTimeout(timeoutId);
-    }
+async function fetchSiteModels(apiUrl, key) {
+    return getAdapter(null).fetchModels(apiUrl, key);
 }
 
 async function runFetchModels(siteId, button) {
     const originalText = button?.textContent ?? '';
-    if (button) button.disabled = true;
-    if (button) button.textContent = '获取中…';
+    const site = findSiteById(siteId);
+    if (!site) throw new Error(tr('err.noSite'));
+    const key = site.keys?.[site.activeKeyIndex];
+    if (!key) throw new Error(tr('err.needKeyFirst'));
+    if (button) {
+        button.disabled = true;
+        button.textContent = tr('fetch.busy');
+    }
     try {
-        const models = await fetchModels(siteId);
+        const models = await fetchSiteModels(site.apiUrl, key);
+        site.models = models;
+        if (site.models.length > 0 && !site.model) site.model = site.models[0];
+        saveSettings();
         renderAll();
         if (editorSiteId === siteId) {
             editorModelChoices = findSiteById(siteId)?.models ?? [];
             document.getElementById('aca-editor-models').value = editorModelChoices.join('\n');
         }
-        toastr?.success?.(models.length > 0 ? `获取到 ${models.length} 个模型` : '站点未返回模型列表，可手动填写', 'API 连接助手');
+        toastr?.success?.(models.length > 0 ? tr('toast.fetchOk', { n: models.length }) : tr('toast.fetchEmpty'), toastTitle());
     } catch (error) {
         renderAll();
-        toastr?.warning?.(error?.message ?? String(error), 'API 连接助手');
+        toastr?.warning?.(error?.message ?? String(error), toastTitle());
     } finally {
         if (button) {
             button.disabled = false;
@@ -200,11 +326,29 @@ async function runFetchModels(siteId, button) {
     }
 }
 
+// ---------- 排序 ----------
+
+function moveSite(siteId, direction) {
+    const settings = getSettings();
+    const sites = getSortedSites();
+    const index = sites.findIndex((site) => site.id === siteId);
+    if (index < 0) return;
+    const target = index + (direction === 'up' ? -1 : 1);
+    if (target < 0 || target >= sites.length) return;
+    const currentOrder = sites[index].order;
+    sites[index].order = sites[target].order;
+    sites[target].order = currentOrder;
+    saveSettings();
+    renderSiteList();
+}
+
+// ---------- 渲染 ----------
+
 function renderGroupFilter() {
     const container = document.getElementById('aca-group-filter');
     if (!container) return;
     const settings = getSettings();
-    const groups = [{ id: 'all', name: '全部' }, ...settings.groups];
+    const groups = [{ id: 'all', name: tr('filter.all') }, ...settings.groups];
     container.innerHTML = groups.map((group) => {
         const activeClass = activeGroupFilter === group.id ? ' is-active' : '';
         return `<button type="button" class="aca-group-chip${activeClass}" data-group-id="${escapeHtml(group.id)}">${escapeHtml(group.name)}</button>`;
@@ -212,9 +356,9 @@ function renderGroupFilter() {
 }
 
 function getVisibleSites() {
-    const settings = getSettings();
-    if (activeGroupFilter === 'all') return settings.sites;
-    return settings.sites.filter((site) => (site.groupId ?? '') === activeGroupFilter);
+    const sorted = getSortedSites();
+    if (activeGroupFilter === 'all') return sorted;
+    return sorted.filter((site) => (site.groupId ?? '') === activeGroupFilter);
 }
 
 function renderSiteList() {
@@ -223,11 +367,11 @@ function renderSiteList() {
     const settings = getSettings();
     const sites = getVisibleSites();
     if (settings.sites.length === 0) {
-        container.innerHTML = '<div class="aca-empty">还没有站点，点下面的「新增站点」添加。</div>';
+        container.innerHTML = `<div class="aca-empty">${tr('list.empty')}</div>`;
         return;
     }
     if (sites.length === 0) {
-        container.innerHTML = '<div class="aca-empty">这个分组下没有站点。</div>';
+        container.innerHTML = `<div class="aca-empty">${tr('list.groupEmpty')}</div>`;
         return;
     }
     container.innerHTML = sites.map((site) => {
@@ -237,25 +381,33 @@ function renderSiteList() {
         const models = site.models.length > 0 ? site.models : (site.model ? [site.model] : []);
         const modelRows = models.length > 0
             ? models.map((model) => `<button type="button" class="aca-site-model${model === site.model ? ' is-active' : ''}" data-model="${escapeHtml(model)}" title="${escapeHtml(model)}">${escapeHtml(model)}</button>`).join('')
-            : '<span class="aca-empty">暂无模型，点「模型」获取或手动填写</span>';
+            : `<span class="aca-empty">${tr('models.empty')}</span>`;
+        const usageBadge = site.usageCount > 0
+            ? `<span class="aca-badge" title="${tr('badge.usageTip')}">${tr('badge.usage', { n: site.usageCount })}</span>`
+            : '';
         return `
             <div class="aca-site-card${activeClass}" data-site-id="${escapeHtml(site.id)}">
                 <div class="aca-site-badges">
-                    <span class="aca-badge">${modelCount} MODELS</span>
-                    <span class="aca-badge ${keyOk ? 'is-ok' : 'is-off'}">${keyOk ? 'KEY ✓' : 'KEY ✗'}</span>
-                    ${site.keys.length > 1 ? `<span class="aca-badge">KEY ${site.activeKeyIndex + 1}/${site.keys.length}</span>` : ''}
+                    <span class="aca-badge">${tr('badge.models', { n: modelCount })}</span>
+                    <span class="aca-badge ${keyOk ? 'is-ok' : 'is-off'}">${keyOk ? tr('badge.keyOk') : tr('badge.keyOff')}</span>
+                    ${site.keys.length > 1 ? `<span class="aca-badge">${tr('badge.keyIndex', { i: site.activeKeyIndex + 1, n: site.keys.length })}</span>` : ''}
+                    ${usageBadge}
                 </div>
                 <div class="aca-site-models">${modelRows}</div>
                 <div class="aca-site-meta">
-                    <span title="最近使用">🕐 ${escapeHtml(formatTime(site.lastUsedAt))}</span>
-                    <span title="分组">📍 ${escapeHtml(getGroupName(site.groupId))}</span>
+                    <span title="${tr('meta.lastUsed')}">🕐 ${escapeHtml(formatTime(site.lastUsedAt))}</span>
+                    <span title="${tr('meta.group')}">📍 ${escapeHtml(getGroupName(site.groupId))}</span>
                 </div>
                 <div class="aca-site-actions">
-                    <button type="button" class="aca-action-primary" data-action="apply" title="使用这个站点"><i class="fa-solid fa-plug"></i> 使用</button>
-                    <button type="button" class="aca-action-button" data-action="models" title="获取 / 刷新模型"><i class="fa-solid fa-layer-group"></i> 模型</button>
-                    <button type="button" class="aca-action-button" data-action="rotate" title="切换到下一把密钥"><i class="fa-solid fa-key"></i></button>
-                    <button type="button" class="aca-action-button" data-action="edit" title="编辑"><i class="fa-solid fa-pen"></i></button>
-                    <button type="button" class="aca-action-button" data-action="delete" title="删除"><i class="fa-solid fa-trash"></i></button>
+                    <button type="button" class="aca-action-primary" data-action="apply" title="${tr('action.useTip')}"><i class="fa-solid fa-plug"></i> ${tr('action.use')}</button>
+                    <button type="button" class="aca-action-button" data-action="models" title="${tr('action.modelsTip')}"><i class="fa-solid fa-layer-group"></i> ${tr('action.models')}</button>
+                    <button type="button" class="aca-action-button" data-action="rotate" title="${tr('action.rotateTip')}"><i class="fa-solid fa-key"></i></button>
+                    <button type="button" class="aca-action-button" data-action="edit" title="${tr('action.edit')}"><i class="fa-solid fa-pen"></i></button>
+                    <button type="button" class="aca-action-button" data-action="delete" title="${tr('action.delete')}"><i class="fa-solid fa-trash"></i></button>
+                    <div class="aca-sort-buttons">
+                        <button type="button" class="aca-sort-button" data-action="up" title="${tr('action.up')}">↑</button>
+                        <button type="button" class="aca-sort-button" data-action="down" title="${tr('action.down')}">↓</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -267,7 +419,7 @@ function renderEditorGroupSelect() {
     if (!select) return;
     const settings = getSettings();
     const site = editorSiteId ? findSiteById(editorSiteId) : null;
-    const options = ['<option value="">未分组</option>'];
+    const options = [`<option value="">${tr('group.none')}</option>`];
     for (const group of settings.groups) {
         const selected = site?.groupId === group.id ? ' selected' : '';
         options.push(`<option value="${escapeHtml(group.id)}"${selected}>${escapeHtml(group.name)}</option>`);
@@ -292,21 +444,21 @@ function renderApiEntry() {
     if (!select || !status) return;
     const settings = getSettings();
     if (settings.sites.length === 0) {
-        select.innerHTML = '<option value="">暂无站点</option>';
+        select.innerHTML = `<option value="">${tr('list.noSites')}</option>`;
         status.innerHTML = '';
         return;
     }
-    select.innerHTML = settings.sites
+    select.innerHTML = getSortedSites()
         .map((site) => `<option value="${escapeHtml(site.id)}"${site.id === settings.activeSiteId ? ' selected' : ''}>${escapeHtml(site.name)}</option>`)
         .join('');
     const site = settings.sites.find((item) => item.id === settings.activeSiteId);
-    status.innerHTML = site ? `<span class="aca-api-model">${escapeHtml(site.model || '未设模型')}</span>` : '';
+    status.innerHTML = site ? `<span class="aca-api-model">${escapeHtml(site.model || tr('meta.noModel'))}</span>` : '';
 }
 
 function renderModelChips(site) {
     if (!expandedSiteModels.has(site.id)) return '';
     const models = site.models.length > 0 ? site.models : (site.model ? [site.model] : []);
-    if (models.length === 0) return '<div class="aca-model-chips"><span class="aca-empty">暂无模型</span></div>';
+    if (models.length === 0) return `<div class="aca-model-chips"><span class="aca-empty">${tr('models.empty')}</span></div>`;
     const chips = models.map((model) => `<button type="button" class="aca-model-chip" data-model="${escapeHtml(model)}" title="${escapeHtml(model)}">${escapeHtml(model)}</button>`).join('');
     return `<div class="aca-model-chips">${chips}</div>`;
 }
@@ -320,6 +472,8 @@ function renderFloatWindow() {
     const enabled = settings.floatWindowEnabled;
     ball.classList.toggle('hidden', !enabled);
     floatRoot.classList.toggle('hidden', !enabled);
+    ball.title = tr('ball.title');
+    document.getElementById('aca-float-title').textContent = tr('float.title');
     if (!enabled) return;
     const position = settings.floatWindowPosition;
     if (position && Number.isFinite(position.x) && Number.isFinite(position.y)) {
@@ -327,16 +481,17 @@ function renderFloatWindow() {
         floatRoot.style.top = `${Math.max(0, position.y)}px`;
         floatRoot.style.right = 'auto';
     }
-    if (settings.sites.length === 0) {
-        list.innerHTML = '<div class="aca-empty">暂无站点</div>';
+    const sites = getSortedSites();
+    if (sites.length === 0) {
+        list.innerHTML = `<div class="aca-empty">${tr('list.noSites')}</div>`;
         return;
     }
-    list.innerHTML = settings.sites.map((site) => `
+    list.innerHTML = sites.map((site) => `
         <div class="aca-float-item${site.id === settings.activeSiteId ? ' is-active' : ''}" data-site-id="${escapeHtml(site.id)}">
             <div class="aca-float-row">
                 <button type="button" class="aca-float-name" title="${escapeHtml(site.name)}">${escapeHtml(site.name)}</button>
-                <span class="aca-float-model" title="${escapeHtml(site.model)}">${escapeHtml(site.model || '未设模型')}</span>
-                <button type="button" class="aca-action-button" data-action="models" title="展开 / 收起模型">模</button>
+                <span class="aca-float-model" title="${escapeHtml(site.model || tr('meta.noModel'))}">${escapeHtml(site.model || tr('meta.noModel'))}</span>
+                <button type="button" class="aca-action-button" data-action="models" title="${tr('float.toggleModels')}">模</button>
             </div>
             ${renderModelChips(site)}
         </div>
@@ -350,7 +505,7 @@ function renderAll() {
     renderFloatWindow();
     renderEditor();
 }
-
+// ---------- 编辑器 ----------
 
 function openEditor(siteId) {
     editorSiteId = siteId;
@@ -358,11 +513,12 @@ function openEditor(siteId) {
     if (!editor) return;
     const site = siteId ? findSiteById(siteId) : null;
     editorModelChoices = site?.models ?? [];
-    document.getElementById('aca-editor-title').textContent = site ? `编辑：${site.name}` : '新增站点';
+    document.getElementById('aca-editor-title').textContent = site ? tr('editor.edit', { name: site.name }) : tr('editor.new');
     document.getElementById('aca-editor-name').value = site?.name ?? '';
     document.getElementById('aca-editor-url').value = site?.apiUrl ?? '';
-    document.getElementById('aca-editor-key').value = '';
-    document.getElementById('aca-editor-key').placeholder = site ? '留空表示不修改密钥' : 'sk-...';
+    const keyInput = document.getElementById('aca-editor-key');
+    keyInput.value = '';
+    keyInput.placeholder = site ? tr('field.keyEditHint') : tr('field.keyPlaceholderNew');
     document.getElementById('aca-editor-models').value = (site?.models ?? []).join('\n');
     document.getElementById('aca-editor-delete').classList.toggle('hidden', !site);
     renderEditorGroupSelect();
@@ -384,21 +540,21 @@ async function saveEditor() {
     const models = uniqueValues(parseMultiValues(document.getElementById('aca-editor-models')?.value));
     const groupId = document.getElementById('aca-editor-group')?.value ?? '';
     if (!name) {
-        showStatus('请填写站点名称。', true);
+        showStatus(tr('status.needName'), true);
         return;
     }
     if (!apiUrl) {
-        showStatus('请填写 API URL。', true);
+        showStatus(tr('status.needUrl'), true);
         return;
     }
     if (!/^https?:\/\//i.test(apiUrl)) {
-        showStatus('API URL 必须以 http:// 或 https:// 开头。', true);
+        showStatus(tr('status.needScheme'), true);
         return;
     }
     const settings = getSettings();
     let site = editorSiteId ? findSiteById(editorSiteId) : null;
     if (!site && keys.length === 0) {
-        showStatus('新增站点时必须填写 API Key。', true);
+        showStatus(tr('status.needKey'), true);
         return;
     }
     try {
@@ -407,12 +563,15 @@ async function saveEditor() {
                 id: crypto.randomUUID(),
                 name,
                 apiUrl,
+                type: 'openai-compatible',
+                order: nextSiteOrder(settings.sites),
                 keys,
                 secretIds: [],
                 activeKeyIndex: 0,
                 models,
                 model: models[0] ?? '',
                 groupId: groupId || '',
+                usageCount: 0,
                 lastUsedAt: null,
             };
             settings.sites.push(site);
@@ -439,7 +598,7 @@ async function saveEditor() {
         saveSettings();
         closeEditor();
         renderAll();
-        toastr?.success?.(`已保存「${site.name}」`, 'API 连接助手');
+        toastr?.success?.(tr('toast.saved', { name: site.name }), toastTitle());
     } catch (error) {
         showStatus(error?.message ?? String(error), true);
     }
@@ -448,7 +607,7 @@ async function saveEditor() {
 async function deleteSite(siteId) {
     const site = findSiteById(siteId);
     if (!site) return;
-    if (!window.confirm(`确定删除「${site.name}」吗？这会同时删除它在酒馆密钥库中的密钥。`)) return;
+    if (!window.confirm(tr('confirm.deleteSite', { name: site.name }))) return;
     try {
         for (const secretId of site.secretIds) {
             if (typeof secretId === 'string' && secretId.length > 0) {
@@ -456,7 +615,7 @@ async function deleteSite(siteId) {
             }
         }
     } catch (error) {
-        toastr?.warning?.(`删除密钥失败：${error?.message ?? String(error)}`, 'API 连接助手');
+        toastr?.warning?.(tr('toast.secretDeleteFail', { msg: error?.message ?? String(error) }), toastTitle());
     }
     const settings = getSettings();
     settings.sites = settings.sites.filter((item) => item.id !== siteId);
@@ -468,12 +627,12 @@ async function deleteSite(siteId) {
 }
 
 function createGroup() {
-    const rawName = window.prompt('新分组名称：');
+    const rawName = window.prompt(tr('toast.groupPrompt'));
     const name = String(rawName ?? '').trim();
     if (!name) return;
     const settings = getSettings();
     if (settings.groups.some((group) => group.name === name)) {
-        toastr?.warning?.('已存在同名分组。', 'API 连接助手');
+        toastr?.warning?.(tr('toast.groupExists'), toastTitle());
         return;
     }
     settings.groups.push({ id: crypto.randomUUID(), name });
@@ -487,12 +646,13 @@ function exportSites() {
     const includeKeys = document.getElementById('aca-export-keys')?.checked ?? false;
     const payload = {
         schema: 'api-connection-assistant',
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         groups: settings.groups,
-        sites: settings.sites.map((site) => ({
+        sites: getSortedSites().map((site) => ({
             name: site.name,
             apiUrl: site.apiUrl,
+            type: site.type ?? 'openai-compatible',
             model: site.model,
             models: site.models,
             groupId: site.groupId,
@@ -510,7 +670,7 @@ function exportSites() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    toastr?.success?.(includeKeys ? '已导出（包含密钥，请妥善保管）' : '已导出（不含密钥）', 'API 连接助手');
+    toastr?.success?.(includeKeys ? tr('io.exportSecure') : tr('io.exportPlain'), toastTitle());
 }
 
 async function importSites(file) {
@@ -519,13 +679,13 @@ async function importSites(file) {
         const text = await file.text();
         payload = JSON.parse(text);
     } catch {
-        toastr?.error?.('导入失败：文件不是合法 JSON。', 'API 连接助手');
+        toastr?.error?.(tr('io.badJson'), toastTitle());
         return;
     }
     const sites = Array.isArray(payload?.sites) ? payload.sites : [];
     const groups = Array.isArray(payload?.groups) ? payload.groups : [];
     if (sites.length === 0 && groups.length === 0) {
-        toastr?.warning?.('文件里没有可导入的站点或分组。', 'API 连接助手');
+        toastr?.warning?.(tr('io.nothing'), toastTitle());
         return;
     }
     const settings = getSettings();
@@ -568,12 +728,15 @@ async function importSites(file) {
                 id: crypto.randomUUID(),
                 name,
                 apiUrl,
+                type: ADAPTERS[site?.type] ? site.type : 'openai-compatible',
+                order: nextSiteOrder(settings.sites),
                 keys,
                 secretIds: [],
                 activeKeyIndex: 0,
                 models,
                 model: models[0] ?? '',
                 groupId,
+                usageCount: 0,
                 lastUsedAt: null,
             };
             settings.sites.push(newSite);
@@ -583,8 +746,55 @@ async function importSites(file) {
     }
     saveSettings();
     renderAll();
-    toastr?.success?.(`导入完成：新增 ${addedSites} 个站点、${addedGroups} 个分组`, 'API 连接助手');
+    toastr?.success?.(tr('toast.importDone', { s: addedSites, g: addedGroups }), toastTitle());
 }
+
+// ---------- 使用统计 ----------
+
+function bindGenerationEvents(context) {
+    const eventTypes = context.eventTypes;
+    if (!eventTypes || !context.eventSource?.on) return;
+    generationStartedHandler = () => {
+        pendingGenerationSiteId = getSettings().activeSiteId;
+    };
+    generationEndedHandler = () => {
+        const siteId = pendingGenerationSiteId;
+        pendingGenerationSiteId = null;
+        if (!siteId) return;
+        const settings = getSettings();
+        const site = settings.sites.find((item) => item.id === siteId);
+        if (!site) return;
+        site.usageCount = (site.usageCount ?? 0) + 1;
+        site.lastUsedAt = Date.now();
+        saveSettings();
+        renderSiteList();
+    };
+    context.eventSource.on(eventTypes.GENERATION_STARTED, generationStartedHandler);
+    context.eventSource.on(eventTypes.GENERATION_ENDED, generationEndedHandler);
+}
+
+function unbindGenerationEvents(context) {
+    if (!generationStartedHandler && !generationEndedHandler) return;
+    if (context?.eventSource?.removeListener && context?.eventTypes) {
+        if (generationStartedHandler) context.eventSource.removeListener(context.eventTypes.GENERATION_STARTED, generationStartedHandler);
+        if (generationEndedHandler) context.eventSource.removeListener(context.eventTypes.GENERATION_ENDED, generationEndedHandler);
+    }
+    generationStartedHandler = null;
+    generationEndedHandler = null;
+    pendingGenerationSiteId = null;
+}
+
+function resetUsageStats() {
+    const settings = getSettings();
+    for (const site of settings.sites) {
+        site.usageCount = 0;
+        site.lastUsedAt = null;
+    }
+    saveSettings();
+    renderAll();
+    toastr?.success?.(tr('settings.statsResetDone'), toastTitle());
+}
+// ---------- 悬浮窗 ----------
 
 function makeFloatDraggable(floatRoot) {
     const header = floatRoot.querySelector('.aca-float-header');
@@ -696,7 +906,7 @@ function createFloatWindow() {
     const ball = document.createElement('button');
     ball.id = 'aca-float-ball';
     ball.type = 'button';
-    ball.title = 'API 连接助手（可拖动）';
+    ball.title = tr('ball.title');
     ball.textContent = '⚡';
     ball.classList.add('hidden');
 
@@ -706,8 +916,8 @@ function createFloatWindow() {
     floatRoot.classList.add('hidden');
     floatRoot.innerHTML = `
         <div class="aca-float-header">
-            <span>API 快切（按住拖动）</span>
-            <button type="button" class="aca-float-close" title="收起">×</button>
+            <span id="aca-float-title">${tr('float.title')}</span>
+            <button type="button" class="aca-float-close" title="${tr('float.collapse')}">×</button>
         </div>
         <div id="aca-float-list"></div>
     `;
@@ -724,18 +934,18 @@ function createFloatWindow() {
         if (button?.classList.contains('aca-float-name')) {
             try {
                 await applySite(siteId);
-                toastr?.success?.(`已切换到「${site.name}」`, 'API 连接助手');
+                toastr?.success?.(tr('toast.switched', { name: site.name }), toastTitle());
             } catch (error) {
-                toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+                toastr?.error?.(error?.message ?? String(error), toastTitle());
             }
             return;
         }
         if (button?.classList.contains('aca-model-chip')) {
             try {
                 await applySite(siteId, button.dataset.model);
-                toastr?.success?.(`已切换到「${site.name}」的 ${button.dataset.model}`, 'API 连接助手');
+                toastr?.success?.(tr('toast.switchedModel', { name: site.name, model: button.dataset.model }), toastTitle());
             } catch (error) {
-                toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+                toastr?.error?.(error?.message ?? String(error), toastTitle());
             }
             return;
         }
@@ -759,11 +969,11 @@ function createApiEntry() {
     entry.id = 'aca-api-entry';
     entry.dataset.extensionId = MODULE_ID;
     entry.innerHTML = `
-        <div class="aca-api-title">API 连接助手</div>
+        <div class="aca-api-title">${tr('apiEntry.title')}</div>
         <div class="aca-api-controls">
             <select id="aca-api-select"></select>
-            <button type="button" id="aca-api-apply" class="aca-action-primary" title="使用这个站点"><i class="fa-solid fa-plug"></i> 应用</button>
-            <button type="button" id="aca-api-fetch" class="aca-action-button" title="获取 / 刷新模型">模型</button>
+            <button type="button" id="aca-api-apply" class="aca-action-primary" title="${tr('action.useTip')}"><i class="fa-solid fa-plug"></i> ${tr('apiEntry.apply')}</button>
+            <button type="button" id="aca-api-fetch" class="aca-action-button" title="${tr('action.modelsTip')}">${tr('action.models')}</button>
             <span id="aca-api-result"></span>
         </div>
     `;
@@ -772,9 +982,9 @@ function createApiEntry() {
         if (!siteId) return;
         try {
             const site = await applySite(siteId);
-            toastr?.success?.(`已切换到「${site.name}」`, 'API 连接助手');
+            toastr?.success?.(tr('toast.switched', { name: site.name }), toastTitle());
         } catch (error) {
-            toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+            toastr?.error?.(error?.message ?? String(error), toastTitle());
         }
     });
     entry.querySelector('#aca-api-fetch')?.addEventListener('click', async (event) => {
@@ -784,6 +994,8 @@ function createApiEntry() {
     });
     anchor.after(entry);
 }
+
+// ---------- 旧数据迁移 ----------
 
 function migrateLegacyProfiles() {
     const context = getContext();
@@ -795,14 +1007,17 @@ function migrateLegacyProfiles() {
         const models = Array.isArray(profile.models) ? profile.models : (profile.model ? [profile.model] : []);
         settings.sites.push({
             id: typeof profile.id === 'string' ? profile.id : crypto.randomUUID(),
-            name: String(profile.name ?? '未命名站点'),
+            name: String(profile.name ?? tr('site.untitled')),
             apiUrl: String(profile.apiUrl ?? ''),
+            type: 'openai-compatible',
+            order: nextSiteOrder(settings.sites),
             keys: profile.apiKey ? [String(profile.apiKey)] : [],
             secretIds: profile.secretId ? [String(profile.secretId)] : [],
             activeKeyIndex: 0,
             models,
             model: profile.model ?? models[0] ?? '',
             groupId: '',
+            usageCount: 0,
             lastUsedAt: null,
         });
     }
@@ -814,6 +1029,8 @@ function migrateLegacyProfiles() {
     saveSettings();
 }
 
+// ---------- 生命周期 ----------
+
 async function onActivate() {
     const context = getContext();
     const settings = getSettings();
@@ -823,9 +1040,15 @@ async function onActivate() {
         const settingsHtml = await context.renderExtensionTemplateAsync('third-party/api-connection-assistant', 'settings', {});
         $('#extensions_settings2').append(settingsHtml);
     }
+    bindSettingsControls(settings);
+    await applyLanguage();
     if (!document.getElementById('aca-float-ball')) createFloatWindow();
     createApiEntry();
+    bindGenerationEvents(context);
+    renderAll();
+}
 
+function bindSettingsControls(settings) {
     const floatToggle = document.getElementById('aca-float-window-enabled');
     if (floatToggle) {
         floatToggle.checked = settings.floatWindowEnabled;
@@ -834,7 +1057,7 @@ async function onActivate() {
             currentSettings.floatWindowEnabled = floatToggle.checked;
             saveSettings();
             renderFloatWindow();
-            if (!floatToggle.checked) toastr?.info?.('悬浮窗已关闭，可随时在设置里打开', 'API 连接助手');
+            if (!floatToggle.checked) toastr?.info?.(tr('toast.floatOff'), toastTitle());
         });
     }
     const autoSync = document.getElementById('aca-auto-sync');
@@ -846,6 +1069,17 @@ async function onActivate() {
             saveSettings();
         });
     }
+    const languageSelect = document.getElementById('aca-language');
+    if (languageSelect) {
+        languageSelect.value = settings.language ?? 'auto';
+        languageSelect.addEventListener('change', async () => {
+            const currentSettings = getSettings();
+            currentSettings.language = languageSelect.value;
+            saveSettings();
+            await applyLanguage();
+        });
+    }
+    document.getElementById('aca-stats-reset')?.addEventListener('click', resetUsageStats);
     document.getElementById('aca-add-site')?.addEventListener('click', () => openEditor(null));
     document.getElementById('aca-editor-save')?.addEventListener('click', saveEditor);
     document.getElementById('aca-editor-cancel')?.addEventListener('click', closeEditor);
@@ -859,30 +1093,28 @@ async function onActivate() {
             const url = normalizeApiUrl(document.getElementById('aca-editor-url')?.value);
             const key = parseMultiValues(document.getElementById('aca-editor-key')?.value)[0];
             if (!url || !key) {
-                showStatus('请先填写 API URL 和 API Key，再获取模型。', true);
+                showStatus(tr('status.fetchHint'), true);
                 return;
             }
-            showStatus('正在获取模型…');
+            const button = event.currentTarget;
+            const originalText = button?.textContent ?? '';
+            if (button) {
+                button.disabled = true;
+                button.textContent = tr('fetch.busy');
+            }
+            showStatus(tr('status.fetching'));
             try {
-                const modelsUrl = `${normalizeApiUrl(url)}/models`;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-                const response = await fetch(modelsUrl, {
-                    method: 'GET',
-                    headers: { Authorization: `Bearer ${key}` },
-                    signal: controller.signal,
-                });
-                clearTimeout(timeoutId);
-                if (!response.ok) throw new Error(`站点返回 HTTP ${response.status}`);
-                const data = await response.json();
-                const models = uniqueValues(Array.isArray(data?.data)
-                    ? data.data.map((item) => item?.id).filter((id) => typeof id === 'string' && id.length > 0)
-                    : []);
+                const models = await fetchSiteModels(url, key);
                 editorModelChoices = models;
                 document.getElementById('aca-editor-models').value = models.join('\n');
-                showStatus(models.length > 0 ? `获取到 ${models.length} 个模型` : '站点未返回模型列表，可手动填写');
+                showStatus(models.length > 0 ? tr('toast.fetchOk', { n: models.length }) : tr('toast.fetchEmpty'));
             } catch (error) {
-                showStatus(error?.name === 'AbortError' ? '请求超时' : (error?.message ?? String(error)), true);
+                showStatus(error?.message ?? String(error), true);
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
             }
             return;
         }
@@ -907,9 +1139,9 @@ async function onActivate() {
                 if (!siteId) return;
                 try {
                     await applySite(siteId, modelButton.dataset.model);
-                    toastr?.success?.(`已切换到 ${modelButton.dataset.model}`, 'API 连接助手');
+                    toastr?.success?.(tr('toast.switchedModelShort', { model: modelButton.dataset.model }), toastTitle());
                 } catch (error) {
-                    toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+                    toastr?.error?.(error?.message ?? String(error), toastTitle());
                 }
             }
             return;
@@ -920,9 +1152,9 @@ async function onActivate() {
         if (action === 'apply') {
             try {
                 const site = await applySite(siteId);
-                toastr?.success?.(`已切换到「${site.name}」`, 'API 连接助手');
+                toastr?.success?.(tr('toast.switched', { name: site.name }), toastTitle());
             } catch (error) {
-                toastr?.error?.(error?.message ?? String(error), 'API 连接助手');
+                toastr?.error?.(error?.message ?? String(error), toastTitle());
             }
             return;
         }
@@ -934,8 +1166,16 @@ async function onActivate() {
             try {
                 await rotateKey(siteId);
             } catch (error) {
-                toastr?.warning?.(error?.message ?? String(error), 'API 连接助手');
+                toastr?.warning?.(error?.message ?? String(error), toastTitle());
             }
+            return;
+        }
+        if (action === 'up') {
+            moveSite(siteId, 'up');
+            return;
+        }
+        if (action === 'down') {
+            moveSite(siteId, 'down');
             return;
         }
         if (action === 'edit') openEditor(siteId);
@@ -948,10 +1188,14 @@ async function onActivate() {
         renderGroupFilter();
         renderSiteList();
     });
-    renderAll();
 }
 
 function onDisable() {
+    try {
+        unbindGenerationEvents(getContext());
+    } catch {
+        /* context may already be gone during shutdown */
+    }
     document.getElementById('aca-settings-root')?.remove();
     document.getElementById('aca-float-ball')?.remove();
     document.getElementById('aca-float-root')?.remove();
@@ -959,5 +1203,3 @@ function onDisable() {
 }
 
 export { onActivate, onDisable };
-
-
