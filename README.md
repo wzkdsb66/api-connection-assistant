@@ -23,10 +23,16 @@ https://github.com/wzkdsb66/api-connection-assistant
 - **名称**：方便识别，例如「白天主力站」
 - **API URL**：例如 `https://example.com/v1`
 - **API Key**：可填多个（换行 / 逗号分隔），第一个为默认；点钥匙按钮在多把钥匙之间轮换切换
-- **模型 ID**：可填多个（换行 / 逗号分隔），第一个为默认；也可以点「获取模型」从站点拉取真实模型列表
+- **模型 ID**：可填多个（换行 / 逗号分隔），第一个为默认；点「获取模型」拉取真实列表后勾选添加（见下节）
 - **分组**：给站点分类，顶部可按分组筛选
 
 站点卡片上：点**模型行**直接切换到该模型；按钮分别是 **使用**（应用整个站点）、**模型**（获取 / 刷新模型列表）、**钥匙**（轮换下一把密钥）、**编辑**、**删除**，最右侧 **↑ ↓** 调整排序。
+
+## 获取模型（挑选添加）
+
+- 点「获取模型」弹出挑选面板：搜索框过滤 → 勾选 → 「添加所选」，模型进入列表。
+- 面板不关，可以继续搜、继续勾选、反复添加；获取**不会**覆盖已有列表，手动填的模型不会被冲掉。
+- 一次拉取太多时只显示前 300 个，用搜索缩小范围即可。
 
 ## 排序
 
@@ -97,10 +103,16 @@ Each site holds:
 - **Name** – e.g. "Main daytime site"
 - **API URL** – e.g. `https://example.com/v1`
 - **API Key** – multiple allowed (newline / comma separated); the first is the default. The key button rotates between them
-- **Model IDs** – multiple allowed; the first is the default. Use **Fetch models** to pull the real list from the site
+- **Model IDs** – multiple allowed; the first is the default. Use **Fetch models** to pull the real list, then pick what to add (see below)
 - **Group** – categorize sites; filter by group at the top
 
 Card actions: click a **model row** to switch straight to it; buttons are **Use**, **Models** (fetch / refresh), **Key** (rotate), **Edit**, **Delete**, plus **↑ ↓** to reorder.
+
+## Fetching Models (Pick to Add)
+
+- **Fetch models** opens a picker: type to filter, check what you want, click **Add selected**.
+- The picker stays open so you can search and add in several rounds. Fetching never overwrites your existing list, so manually typed models are safe.
+- Only the first 300 results are shown per fetch when a site returns a huge list - use search to narrow down.
 
 ## Custom Sorting
 

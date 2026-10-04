@@ -16,10 +16,14 @@ const SUPPORTED_LANGUAGES = ['zh-cn', 'en'];
 const expandedSiteModels = new Set();
 const languageDictionaries = new Map();
 const attemptedLanguages = new Set();
+const PICKER_RENDER_CAP = 300;
 let currentLanguage = 'zh-cn';
 let editorSiteId = null;
-let editorModelChoices = [];
 let activeGroupFilter = 'all';
+let pickerModels = [];
+let pickerSelected = new Set();
+let pickerSiteId = null;
+let pickerSearch = '';
 let pendingGenerationSiteId = null;
 let generationStartedHandler = null;
 let generationEndedHandler = null;
@@ -86,6 +90,9 @@ async function applyLanguage() {
     const loaded = await loadLanguage(resolveWantedLanguage(settings));
     if (loaded) currentLanguage = loaded;
     applyTranslations(document.getElementById('aca-settings-root'));
+    if (document.getElementById('aca-model-picker') && !document.getElementById('aca-model-picker').classList.contains('hidden')) {
+        renderPickerList();
+    }
     renderAll();
 }
 
@@ -297,26 +304,27 @@ async function fetchSiteModels(apiUrl, key) {
 async function runFetchModels(siteId, button) {
     const originalText = button?.textContent ?? '';
     const site = findSiteById(siteId);
-    if (!site) throw new Error(tr('err.noSite'));
+    if (!site) {
+        toastr?.warning?.(tr('err.noSite'), toastTitle());
+        return;
+    }
     const key = site.keys?.[site.activeKeyIndex];
-    if (!key) throw new Error(tr('err.needKeyFirst'));
+    if (!key) {
+        toastr?.warning?.(tr('err.needKeyFirst'), toastTitle());
+        return;
+    }
     if (button) {
         button.disabled = true;
         button.textContent = tr('fetch.busy');
     }
     try {
         const models = await fetchSiteModels(site.apiUrl, key);
-        site.models = models;
-        if (site.models.length > 0 && !site.model) site.model = site.models[0];
-        saveSettings();
-        renderAll();
-        if (editorSiteId === siteId) {
-            editorModelChoices = findSiteById(siteId)?.models ?? [];
-            document.getElementById('aca-editor-models').value = editorModelChoices.join('\n');
+        if (models.length === 0) {
+            toastr?.warning?.(tr('toast.fetchEmpty'), toastTitle());
+            return;
         }
-        toastr?.success?.(models.length > 0 ? tr('toast.fetchOk', { n: models.length }) : tr('toast.fetchEmpty'), toastTitle());
+        openModelPicker(models, siteId);
     } catch (error) {
-        renderAll();
         toastr?.warning?.(error?.message ?? String(error), toastTitle());
     } finally {
         if (button) {
@@ -340,6 +348,94 @@ function moveSite(siteId, direction) {
     sites[target].order = currentOrder;
     saveSettings();
     renderSiteList();
+}
+
+// ---------- 模型挑选面板 ----------
+
+function openModelPicker(models, siteId = null) {
+    pickerModels = uniqueValues(models);
+    pickerSiteId = siteId;
+    pickerSelected = new Set();
+    pickerSearch = '';
+    const search = document.getElementById('aca-picker-search');
+    if (search) search.value = '';
+    const picker = document.getElementById('aca-model-picker');
+    if (!picker) return;
+    picker.classList.remove('hidden');
+    renderPickerList();
+    picker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeModelPicker() {
+    pickerModels = [];
+    pickerSelected = new Set();
+    pickerSiteId = null;
+    pickerSearch = '';
+    document.getElementById('aca-model-picker')?.classList.add('hidden');
+}
+
+function getFilteredPickerModels() {
+    const query = pickerSearch.trim().toLowerCase();
+    if (!query) return pickerModels;
+    return pickerModels.filter((model) => model.toLowerCase().includes(query));
+}
+
+function updatePickerStatus() {
+    const status = document.getElementById('aca-picker-status');
+    if (status) {
+        const filtered = getFilteredPickerModels();
+        const parts = [tr('picker.total', { n: pickerModels.length }), tr('picker.selected', { n: pickerSelected.size })];
+        if (filtered.length > PICKER_RENDER_CAP) parts.push(tr('picker.capped', { n: PICKER_RENDER_CAP }));
+        status.textContent = parts.join(' · ');
+    }
+    const addButton = document.getElementById('aca-picker-add');
+    if (addButton) addButton.textContent = tr('picker.add', { n: pickerSelected.size });
+}
+
+function renderPickerList() {
+    const list = document.getElementById('aca-picker-list');
+    if (!list) return;
+    updatePickerStatus();
+    const filtered = getFilteredPickerModels();
+    const visible = filtered.slice(0, PICKER_RENDER_CAP);
+    if (visible.length === 0) {
+        list.innerHTML = `<div class="aca-empty">${pickerSearch.trim() ? tr('picker.noMatch') : tr('picker.noModels')}</div>`;
+        return;
+    }
+    list.innerHTML = visible.map((model) => {
+        const checked = pickerSelected.has(model) ? ' checked' : '';
+        return `<label class="aca-picker-item"><input type="checkbox" data-model="${escapeHtml(model)}"${checked}><span title="${escapeHtml(model)}">${escapeHtml(model)}</span></label>`;
+    }).join('');
+}
+
+function addPickedModels() {
+    const picked = [...pickerSelected];
+    if (picked.length === 0) {
+        toastr?.warning?.(tr('picker.noneSelected'), toastTitle());
+        return;
+    }
+    const textarea = document.getElementById('aca-editor-models');
+    const existing = uniqueValues(parseMultiValues(textarea?.value));
+    const fresh = picked.filter((model) => !existing.includes(model));
+    if (fresh.length === 0) {
+        toastr?.info?.(tr('picker.alreadyAll'), toastTitle());
+        return;
+    }
+    const merged = uniqueValues([...existing, ...fresh]);
+    if (textarea) textarea.value = merged.join('\n');
+    pickerSelected = new Set();
+    if (pickerSiteId) {
+        const settings = getSettings();
+        const site = settings.sites.find((item) => item.id === pickerSiteId);
+        if (site) {
+            site.models = merged;
+            if (!site.model) site.model = merged[0];
+            saveSettings();
+            renderSiteList();
+        }
+    }
+    renderPickerList();
+    toastr?.success?.(tr('picker.added', { n: fresh.length }), toastTitle());
 }
 
 // ---------- 渲染 ----------
@@ -428,13 +524,9 @@ function renderEditorGroupSelect() {
 }
 
 function renderEditor() {
-    if (!editorSiteId) {
-        editorModelChoices = [];
-        return;
-    }
+    if (!editorSiteId) return;
     const site = findSiteById(editorSiteId);
     if (!site) return;
-    if (editorModelChoices.length === 0 && site.models.length > 0) editorModelChoices = site.models;
     renderEditorGroupSelect();
 }
 
@@ -512,7 +604,6 @@ function openEditor(siteId) {
     const editor = document.getElementById('aca-editor');
     if (!editor) return;
     const site = siteId ? findSiteById(siteId) : null;
-    editorModelChoices = site?.models ?? [];
     document.getElementById('aca-editor-title').textContent = site ? tr('editor.edit', { name: site.name }) : tr('editor.new');
     document.getElementById('aca-editor-name').value = site?.name ?? '';
     document.getElementById('aca-editor-url').value = site?.apiUrl ?? '';
@@ -529,7 +620,7 @@ function openEditor(siteId) {
 
 function closeEditor() {
     editorSiteId = null;
-    editorModelChoices = [];
+    closeModelPicker();
     document.getElementById('aca-editor')?.classList.add('hidden');
 }
 
@@ -1087,41 +1178,50 @@ function bindSettingsControls(settings) {
         if (editorSiteId) deleteSite(editorSiteId);
     });
     document.getElementById('aca-editor-new-group')?.addEventListener('click', createGroup);
-    document.getElementById('aca-editor-fetch-models')?.addEventListener('click', async (event) => {
-        const siteId = editorSiteId;
-        if (!siteId) {
-            const url = normalizeApiUrl(document.getElementById('aca-editor-url')?.value);
-            const key = parseMultiValues(document.getElementById('aca-editor-key')?.value)[0];
-            if (!url || !key) {
-                showStatus(tr('status.fetchHint'), true);
-                return;
-            }
-            const button = event.currentTarget;
-            const originalText = button?.textContent ?? '';
-            if (button) {
-                button.disabled = true;
-                button.textContent = tr('fetch.busy');
-            }
-            showStatus(tr('status.fetching'));
-            try {
-                const models = await fetchSiteModels(url, key);
-                editorModelChoices = models;
-                document.getElementById('aca-editor-models').value = models.join('\n');
-                showStatus(models.length > 0 ? tr('toast.fetchOk', { n: models.length }) : tr('toast.fetchEmpty'));
-            } catch (error) {
-                showStatus(error?.message ?? String(error), true);
-            } finally {
-                if (button) {
-                    button.disabled = false;
-                    button.textContent = originalText;
-                }
-            }
+    document.getElementById('aca-editor-fetch-models')?.addEventListener('click', async () => {
+        const site = editorSiteId ? findSiteById(editorSiteId) : null;
+        const url = normalizeApiUrl(document.getElementById('aca-editor-url')?.value);
+        const key = site ? site.keys?.[site.activeKeyIndex] : parseMultiValues(document.getElementById('aca-editor-key')?.value)[0];
+        if (!url || !key) {
+            showStatus(tr('status.fetchHint'), true);
             return;
         }
-        await runFetchModels(siteId, event.currentTarget);
-        editorModelChoices = findSiteById(siteId)?.models ?? [];
-        document.getElementById('aca-editor-models').value = editorModelChoices.join('\n');
+        showStatus(tr('status.fetching'));
+        try {
+            const models = await fetchSiteModels(url, key);
+            if (models.length === 0) {
+                showStatus(tr('toast.fetchEmpty'));
+                return;
+            }
+            showStatus('');
+            openModelPicker(models, editorSiteId);
+        } catch (error) {
+            showStatus(error?.message ?? String(error), true);
+        }
     });
+    document.getElementById('aca-picker-search')?.addEventListener('input', (event) => {
+        pickerSearch = event.target?.value ?? '';
+        renderPickerList();
+    });
+    document.getElementById('aca-picker-select-visible')?.addEventListener('click', () => {
+        const visible = getFilteredPickerModels().slice(0, PICKER_RENDER_CAP);
+        const allSelected = visible.length > 0 && visible.every((model) => pickerSelected.has(model));
+        for (const model of visible) {
+            if (allSelected) pickerSelected.delete(model);
+            else pickerSelected.add(model);
+        }
+        renderPickerList();
+    });
+    document.getElementById('aca-picker-list')?.addEventListener('change', (event) => {
+        const checkbox = event.target?.closest?.('input[type="checkbox"]');
+        if (!checkbox) return;
+        const model = checkbox.dataset.model;
+        if (checkbox.checked) pickerSelected.add(model);
+        else pickerSelected.delete(model);
+        updatePickerStatus();
+    });
+    document.getElementById('aca-picker-add')?.addEventListener('click', addPickedModels);
+    document.getElementById('aca-picker-close')?.addEventListener('click', closeModelPicker);
     document.getElementById('aca-export')?.addEventListener('click', exportSites);
     document.getElementById('aca-import')?.addEventListener('click', () => document.getElementById('aca-import-file')?.click());
     document.getElementById('aca-import-file')?.addEventListener('change', async (event) => {

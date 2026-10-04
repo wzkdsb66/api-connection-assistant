@@ -70,6 +70,20 @@
                 <div id="aca-editor-status" class="aca-editor-status"></div>
             </div>
 
+            <div id="aca-model-picker" class="aca-picker hidden">
+                <div class="aca-picker-title" data-tr="picker.title">挑选模型添加到列表</div>
+                <div class="aca-picker-toolbar">
+                    <input type="text" id="aca-picker-search" data-tr-placeholder="picker.search">
+                    <button type="button" id="aca-picker-select-visible" class="aca-ghost-button" data-tr="picker.selectVisible">全选当前可见</button>
+                </div>
+                <div id="aca-picker-status" class="aca-picker-status"></div>
+                <div id="aca-picker-list" class="aca-picker-list"></div>
+                <div class="aca-picker-actions">
+                    <button type="button" id="aca-picker-add" class="aca-primary-button" data-tr="picker.add">添加所选（0）</button>
+                    <button type="button" id="aca-picker-close" class="aca-ghost-button" data-tr="picker.close">关闭</button>
+                </div>
+            </div>
+
             <div class="aca-io-row">
                 <label class="checkbox_label aca-io-checkbox">
                     <input id="aca-export-keys" type="checkbox">
