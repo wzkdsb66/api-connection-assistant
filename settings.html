@@ -47,8 +47,11 @@
                     <input type="text" id="aca-editor-url" data-tr-placeholder="field.url">
                 </label>
                 <label class="aca-field">
-                    <span data-tr="field.key">API Key（可多个：换行 / 逗号分隔，首个为默认）</span>
-                    <textarea id="aca-editor-key" rows="2" placeholder="sk-..."></textarea>
+                    <span data-tr="field.key">API Key（可多个：逗号分隔，首个为默认）</span>
+                    <div class="aca-key-row">
+                        <input type="password" id="aca-editor-key" autocomplete="off" spellcheck="false" data-tr-placeholder="field.keyPlaceholderNew">
+                        <button type="button" id="aca-editor-key-toggle" class="aca-ghost-button" data-tr="field.keyShow">显示</button>
+                    </div>
                 </label>
                 <label class="aca-field">
                     <span data-tr="field.models">模型 ID（可多个：换行 / 逗号分隔，首个为默认）</span>

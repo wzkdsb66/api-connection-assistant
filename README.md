@@ -7,6 +7,7 @@
 - SillyTavern `1.18.0` 或更高
 - 密钥写入酒馆原生密钥库（`api_key_custom` 命名槽位），同时保存在本机扩展数据中
 - 不联网上报数据、不随角色卡导出
+- 更新记录见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 安装
 
@@ -22,7 +23,7 @@ https://github.com/wzkdsb66/api-connection-assistant
 
 - **名称**：方便识别，例如「白天主力站」
 - **API URL**：例如 `https://example.com/v1`
-- **API Key**：可填多个（换行 / 逗号分隔），第一个为默认；点钥匙按钮在多把钥匙之间轮换切换
+- **API Key**：可填多个（逗号分隔），第一个为默认；点钥匙按钮在多把钥匙之间轮换切换。输入框默认打码，点「显示」可临时明文查看；站点卡片显示当前密钥后四位方便辨认
 - **模型 ID**：可填多个（换行 / 逗号分隔），第一个为默认；点「获取模型」拉取真实列表后勾选添加（见下节）
 - **分组**：给站点分类，顶部可按分组筛选
 
@@ -44,6 +45,7 @@ https://github.com/wzkdsb66/api-connection-assistant
 
 - 每次用本插件连接成功后开始生成，酒馆报「生成结束」时，给当前站点记 1 次使用，并更新「最近使用」时间。
 - 统计只写在本机扩展数据里，不参与排序，可点「重置使用统计」一键清零。
+- 记账口径：以本插件最后一次成功切换的站点为准。如果你中途从酒馆原生 API 面板换了别的源，这段时间的生成仍会记在当前站点上——这是近似记账，别当精确账单用。
 
 ## 悬浮快切窗
 
@@ -68,7 +70,7 @@ https://github.com/wzkdsb66/api-connection-assistant
 
 ## 导入 / 导出
 
-- 导出：把站点列表保存成 JSON 文件。默认**不含密钥**；勾选「导出时包含密钥」后会把密钥一并写入文件（请妥善保管）。
+- 导出：把站点列表保存成 JSON 文件。默认**不含密钥**；勾选「导出时包含密钥」后会弹二次确认，文件名带 `INCLUDES-KEYS-` 前缀（请妥善保管）。
 - 导入：选择之前导出的 JSON，按「名称 + URL」合并，同名同址的站点会更新，其余新增。
 
 ## 边界说明
@@ -87,6 +89,7 @@ Manage API connections as *sites*: name + URL + key + model list saved together 
 - SillyTavern `1.18.0` or newer
 - Keys are written to SillyTavern's native secret store (`api_key_custom` slot) and also kept in the extension's local data
 - Nothing is reported online and nothing rides along with character cards
+- See [CHANGELOG.md](CHANGELOG.md) for the changelog
 
 ## Install
 
@@ -102,7 +105,7 @@ Each site holds:
 
 - **Name** – e.g. "Main daytime site"
 - **API URL** – e.g. `https://example.com/v1`
-- **API Key** – multiple allowed (newline / comma separated); the first is the default. The key button rotates between them
+- **API Key** – multiple allowed (comma separated); the first is the default. The key button rotates between them. The input is masked by default; the card shows the last 4 characters of the current key
 - **Model IDs** – multiple allowed; the first is the default. Use **Fetch models** to pull the real list, then pick what to add (see below)
 - **Group** – categorize sites; filter by group at the top
 
@@ -124,6 +127,7 @@ Card actions: click a **model row** to switch straight to it; buttons are **Use*
 
 - After a site is applied and a generation finishes, the active site gains one usage count and a fresh "last used" timestamp.
 - Stats live only in the extension's local data, never affect sorting, and can be cleared with **Reset usage stats**.
+- How counting works: generations are attributed to the site this extension last switched to. If you change the source from SillyTavern's own API panel, those generations still count toward the extension's current site - treat it as an approximate counter, not an exact bill.
 
 ## Floating Quick-Switch Window
 
@@ -147,7 +151,7 @@ There is **no** test function anywhere in this extension, so it never sends requ
 
 ## Import / Export
 
-- Export writes the site list to a JSON file. Keys are **excluded** by default; check "Include keys when exporting" to embed them (keep the file safe).
+- Export writes the site list to a JSON file. Keys are **excluded** by default; checking "Include keys when exporting" asks for confirmation and names the file with an `INCLUDES-KEYS-` prefix (keep the file safe).
 - Import merges by name + URL: matching sites are updated, the rest are added.
 
 ## Boundaries

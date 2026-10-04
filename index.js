@@ -24,6 +24,7 @@ let pickerModels = [];
 let pickerSelected = new Set();
 let pickerSiteId = null;
 let pickerSearch = '';
+let viewportClampHandler = null;
 let pendingGenerationSiteId = null;
 let generationStartedHandler = null;
 let generationEndedHandler = null;
@@ -93,6 +94,7 @@ async function applyLanguage() {
     if (document.getElementById('aca-model-picker') && !document.getElementById('aca-model-picker').classList.contains('hidden')) {
         renderPickerList();
     }
+    syncKeyToggleLabel();
     renderAll();
 }
 
@@ -249,6 +251,12 @@ function showStatus(message, isError = false) {
     if (isError) toastr?.error?.(message, toastTitle());
 }
 
+function syncKeyToggleLabel() {
+    const input = document.getElementById('aca-editor-key');
+    const toggle = document.getElementById('aca-editor-key-toggle');
+    if (toggle) toggle.textContent = input?.type === 'password' ? tr('field.keyShow') : tr('field.keyHide');
+}
+
 // ---------- 密钥与切换 ----------
 
 async function ensureKeySecret(site, keyIndex) {
@@ -338,14 +346,14 @@ async function runFetchModels(siteId, button) {
 
 function moveSite(siteId, direction) {
     const settings = getSettings();
-    const sites = getSortedSites();
-    const index = sites.findIndex((site) => site.id === siteId);
+    const visible = getVisibleSites();
+    const index = visible.findIndex((site) => site.id === siteId);
     if (index < 0) return;
     const target = index + (direction === 'up' ? -1 : 1);
-    if (target < 0 || target >= sites.length) return;
-    const currentOrder = sites[index].order;
-    sites[index].order = sites[target].order;
-    sites[target].order = currentOrder;
+    if (target < 0 || target >= visible.length) return;
+    const currentOrder = visible[index].order;
+    visible[index].order = visible[target].order;
+    visible[target].order = currentOrder;
     saveSettings();
     renderSiteList();
 }
@@ -486,6 +494,7 @@ function renderSiteList() {
                 <div class="aca-site-badges">
                     <span class="aca-badge">${tr('badge.models', { n: modelCount })}</span>
                     <span class="aca-badge ${keyOk ? 'is-ok' : 'is-off'}">${keyOk ? tr('badge.keyOk') : tr('badge.keyOff')}</span>
+                    ${keyOk ? `<span class="aca-badge" title="${tr('badge.keyTailTip')}">•••${escapeHtml(String(site.keys?.[site.activeKeyIndex] ?? '').slice(-4))}</span>` : ''}
                     ${site.keys.length > 1 ? `<span class="aca-badge">${tr('badge.keyIndex', { i: site.activeKeyIndex + 1, n: site.keys.length })}</span>` : ''}
                     ${usageBadge}
                 </div>
@@ -610,6 +619,8 @@ function openEditor(siteId) {
     const keyInput = document.getElementById('aca-editor-key');
     keyInput.value = '';
     keyInput.placeholder = site ? tr('field.keyEditHint') : tr('field.keyPlaceholderNew');
+    keyInput.type = 'password';
+    syncKeyToggleLabel();
     document.getElementById('aca-editor-models').value = (site?.models ?? []).join('\n');
     document.getElementById('aca-editor-delete').classList.toggle('hidden', !site);
     renderEditorGroupSelect();
@@ -735,6 +746,7 @@ function createGroup() {
 function exportSites() {
     const settings = getSettings();
     const includeKeys = document.getElementById('aca-export-keys')?.checked ?? false;
+    if (includeKeys && !window.confirm(tr('io.exportConfirm'))) return;
     const payload = {
         schema: 'api-connection-assistant',
         version: 2,
@@ -756,7 +768,7 @@ function exportSites() {
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
     const link = document.createElement('a');
     link.href = url;
-    link.download = `api-connection-assistant-${stamp}.json`;
+    link.download = `${includeKeys ? 'INCLUDES-KEYS-' : ''}api-connection-assistant-${stamp}.json`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -893,6 +905,8 @@ function makeFloatDraggable(floatRoot) {
     let dragging = false;
     let offsetX = 0;
     let offsetY = 0;
+    let startLeft = 0;
+    let startTop = 0;
 
     const clampToViewport = (x, y) => ({
         x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - floatRoot.offsetWidth)),
@@ -902,9 +916,12 @@ function makeFloatDraggable(floatRoot) {
     header.addEventListener('pointerdown', (event) => {
         if (event.target.closest('button')) return;
         const rect = floatRoot.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop = rect.top;
         offsetX = event.clientX - rect.left;
         offsetY = event.clientY - rect.top;
         dragging = true;
+        floatRoot.style.willChange = 'transform';
         try {
             header.setPointerCapture(event.pointerId);
         } catch {
@@ -914,9 +931,7 @@ function makeFloatDraggable(floatRoot) {
     header.addEventListener('pointermove', (event) => {
         if (!dragging) return;
         const { x, y } = clampToViewport(event.clientX - offsetX, event.clientY - offsetY);
-        floatRoot.style.left = `${x}px`;
-        floatRoot.style.top = `${y}px`;
-        floatRoot.style.right = 'auto';
+        floatRoot.style.transform = `translate3d(${x - startLeft}px, ${y - startTop}px, 0)`;
     });
     const finishDrag = (event) => {
         if (!dragging) return;
@@ -926,9 +941,14 @@ function makeFloatDraggable(floatRoot) {
         } catch {
             /* pointer capture is best-effort */
         }
+        floatRoot.style.willChange = '';
         const rect = floatRoot.getBoundingClientRect();
+        floatRoot.style.transform = '';
+        floatRoot.style.left = `${Math.round(rect.left)}px`;
+        floatRoot.style.top = `${Math.round(rect.top)}px`;
+        floatRoot.style.right = 'auto';
         const settings = getSettings();
-        settings.floatWindowPosition = { x: rect.left, y: rect.top };
+        settings.floatWindowPosition = { x: Math.round(rect.left), y: Math.round(rect.top) };
         saveSettings();
     };
     header.addEventListener('pointerup', finishDrag);
@@ -940,16 +960,21 @@ function makeBallDraggable(ball, floatRoot) {
     let moved = false;
     let offsetX = 0;
     let offsetY = 0;
+    let startLeft = 0;
+    let startTop = 0;
     const clamp = (x, y) => ({
         x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - ball.offsetWidth)),
         y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - ball.offsetHeight)),
     });
     ball.addEventListener('pointerdown', (event) => {
         const rect = ball.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop = rect.top;
         offsetX = event.clientX - rect.left;
         offsetY = event.clientY - rect.top;
         dragging = true;
         moved = false;
+        ball.style.willChange = 'transform';
         try {
             ball.setPointerCapture(event.pointerId);
         } catch {
@@ -959,9 +984,7 @@ function makeBallDraggable(ball, floatRoot) {
     ball.addEventListener('pointermove', (event) => {
         if (!dragging) return;
         const { x, y } = clamp(event.clientX - offsetX, event.clientY - offsetY);
-        ball.style.left = `${x}px`;
-        ball.style.top = `${y}px`;
-        ball.style.right = 'auto';
+        ball.style.transform = `translate3d(${x - startLeft}px, ${y - startTop}px, 0)`;
         if (Math.abs(event.movementX) + Math.abs(event.movementY) > 1) moved = true;
     });
     const finishDrag = (event) => {
@@ -972,12 +995,17 @@ function makeBallDraggable(ball, floatRoot) {
         } catch {
             /* pointer capture is best-effort */
         }
+        ball.style.willChange = '';
+        const rect = ball.getBoundingClientRect();
+        ball.style.transform = '';
+        ball.style.left = `${Math.round(rect.left)}px`;
+        ball.style.top = `${Math.round(rect.top)}px`;
+        ball.style.right = 'auto';
         if (moved) {
-            const rect = ball.getBoundingClientRect();
             const settings = getSettings();
-            settings.floatWindowPosition = { x: rect.left, y: rect.top };
-            floatRoot.style.left = `${rect.left + 36}px`;
-            floatRoot.style.top = `${rect.top + 36}px`;
+            settings.floatWindowPosition = { x: Math.round(rect.left), y: Math.round(rect.top) };
+            floatRoot.style.left = `${Math.round(rect.left) + 36}px`;
+            floatRoot.style.top = `${Math.round(rect.top) + 36}px`;
             floatRoot.style.right = 'auto';
             saveSettings();
         }
@@ -1049,6 +1077,26 @@ function createFloatWindow() {
     makeFloatDraggable(floatRoot);
     makeBallDraggable(ball, floatRoot);
     document.body.append(ball, floatRoot);
+    viewportClampHandler = () => {
+        const settings = getSettings();
+        if (!settings.floatWindowPosition) return;
+        let anyVisible = false;
+        for (const element of [ball, floatRoot]) {
+            if (element.classList.contains('hidden')) continue;
+            anyVisible = true;
+            const rect = element.getBoundingClientRect();
+            const x = Math.min(Math.max(0, rect.left), Math.max(0, window.innerWidth - element.offsetWidth));
+            const y = Math.min(Math.max(0, rect.top), Math.max(0, window.innerHeight - element.offsetHeight));
+            element.style.left = `${x}px`;
+            element.style.top = `${y}px`;
+            element.style.right = 'auto';
+        }
+        if (!anyVisible) return;
+        const rect = ball.getBoundingClientRect();
+        settings.floatWindowPosition = { x: Math.round(rect.left), y: Math.round(rect.top) };
+        saveSettings();
+    };
+    window.addEventListener('resize', viewportClampHandler);
 }
 
 function createApiEntry() {
@@ -1222,6 +1270,12 @@ function bindSettingsControls(settings) {
     });
     document.getElementById('aca-picker-add')?.addEventListener('click', addPickedModels);
     document.getElementById('aca-picker-close')?.addEventListener('click', closeModelPicker);
+    document.getElementById('aca-editor-key-toggle')?.addEventListener('click', () => {
+        const input = document.getElementById('aca-editor-key');
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
+        syncKeyToggleLabel();
+    });
     document.getElementById('aca-export')?.addEventListener('click', exportSites);
     document.getElementById('aca-import')?.addEventListener('click', () => document.getElementById('aca-import-file')?.click());
     document.getElementById('aca-import-file')?.addEventListener('change', async (event) => {
@@ -1295,6 +1349,10 @@ function onDisable() {
         unbindGenerationEvents(getContext());
     } catch {
         /* context may already be gone during shutdown */
+    }
+    if (viewportClampHandler) {
+        window.removeEventListener('resize', viewportClampHandler);
+        viewportClampHandler = null;
     }
     document.getElementById('aca-settings-root')?.remove();
     document.getElementById('aca-float-ball')?.remove();

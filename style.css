@@ -570,3 +570,29 @@
     gap: 0.4em;
     flex-wrap: wrap;
 }
+/* v2.1.0: 密钥行 */
+.aca-key-row {
+    display: flex;
+    gap: 0.4em;
+    align-items: center;
+}
+
+.aca-key-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* v2.1.0: 悬浮窗性能：毛玻璃只留一层并去掉最贵的 saturate；子元素不再各自采样背景 */
+#aca-float-root {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+#aca-float-list {
+    overscroll-behavior: contain;
+}
+
+#aca-float-list .aca-action-button {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
