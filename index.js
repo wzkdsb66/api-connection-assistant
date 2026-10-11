@@ -9,6 +9,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     floatWindowPosition: null,
     autoSyncFloat: true,
     language: 'auto',
+    tutorialSeen: false,
+    tutorialExpanded: false,
 });
 const FETCH_TIMEOUT_MS = 15000;
 const SUPPORTED_LANGUAGES = ['zh-cn', 'en'];
@@ -159,6 +161,14 @@ function getSettings() {
     if (!settings.floatWindowPosition || typeof settings.floatWindowPosition !== 'object') settings.floatWindowPosition = null;
     if (!SUPPORTED_LANGUAGES.includes(settings.language) && settings.language !== 'auto') {
         settings.language = 'auto';
+        changed = true;
+    }
+    if (typeof settings.tutorialSeen !== 'boolean') {
+        settings.tutorialSeen = false;
+        changed = true;
+    }
+    if (typeof settings.tutorialExpanded !== 'boolean') {
+        settings.tutorialExpanded = false;
         changed = true;
     }
     let maxOrder = -1;
@@ -447,6 +457,15 @@ function addPickedModels() {
 }
 
 // ---------- 渲染 ----------
+
+function applyTutorialState() {
+    const settings = getSettings();
+    const body = document.getElementById('aca-tutorial-body');
+    const toggle = document.getElementById('aca-tutorial-toggle');
+    if (!body || !toggle) return;
+    body.classList.toggle('hidden', !settings.tutorialExpanded);
+    toggle.setAttribute('aria-expanded', String(settings.tutorialExpanded));
+}
 
 function renderGroupFilter() {
     const container = document.getElementById('aca-group-filter');
@@ -1180,6 +1199,12 @@ async function onActivate() {
         $('#extensions_settings2').append(settingsHtml);
     }
     bindSettingsControls(settings);
+    if (!settings.tutorialSeen) {
+        settings.tutorialSeen = true;
+        settings.tutorialExpanded = true;
+        saveSettings();
+    }
+    applyTutorialState();
     await applyLanguage();
     if (!document.getElementById('aca-float-ball')) createFloatWindow();
     createApiEntry();
@@ -1219,6 +1244,13 @@ function bindSettingsControls(settings) {
         });
     }
     document.getElementById('aca-stats-reset')?.addEventListener('click', resetUsageStats);
+    document.getElementById('aca-tutorial-toggle')?.addEventListener('click', () => {
+        const currentSettings = getSettings();
+        currentSettings.tutorialExpanded = !currentSettings.tutorialExpanded;
+        currentSettings.tutorialSeen = true;
+        saveSettings();
+        applyTutorialState();
+    });
     document.getElementById('aca-add-site')?.addEventListener('click', () => openEditor(null));
     document.getElementById('aca-editor-save')?.addEventListener('click', saveEditor);
     document.getElementById('aca-editor-cancel')?.addEventListener('click', closeEditor);

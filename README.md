@@ -17,6 +17,10 @@
 https://github.com/wzkdsb66/api-connection-assistant
 ```
 
+## 内置使用教程
+
+扩展设置面板顶部有一个「使用教程」折叠区，**第一次打开自动展开**（之后不再打扰，随时可收起再展开）。内容为大白话三步上手（新增站点 → 挑选添加模型 → 一键切换）加进阶说明（悬浮窗、多密钥、分组排序、统计、导入导出、语言），中英双语跟随界面语言。
+
 ## 站点管理
 
 每个站点包含：
@@ -98,6 +102,10 @@ In SillyTavern: **Extensions → Manage Extensions → Install extension**, then
 ```text
 https://github.com/wzkdsb66/api-connection-assistant
 ```
+
+## Built-in Tutorial
+
+The settings panel has a "Tutorial" section at the top that **auto-expands the first time you open it** (then stays quiet; collapse or reopen it anytime). It walks through three plain-language steps (add a site - pick models - switch in one click) plus advanced topics (floating window, multiple keys, groups/sorting, stats, import/export, language). It follows the interface language.
 
 ## Sites
 
