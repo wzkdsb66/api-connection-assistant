@@ -2,15 +2,18 @@
     contain: content;
 }
 
-#aca-settings-root {
-    --aca-glass-bg: rgba(102, 158, 235, 0.14);
-    --aca-glass-bg-strong: rgba(102, 158, 235, 0.22);
-    --aca-glass-border: rgba(150, 200, 255, 0.30);
-    --aca-glass-border-strong: rgba(130, 205, 255, 0.75);
-    --aca-text: inherit;
-    --aca-muted: rgba(190, 215, 245, 0.75);
+[data-extension-id="api-connection-assistant"] {
+    --aca-tint: var(--SmartThemeBlurTintColor, rgba(23, 23, 23, 1));
+    --aca-glass-bg: color-mix(in srgb, var(--aca-tint) 78%, transparent);
+    --aca-glass-bg-strong: color-mix(in srgb, var(--aca-tint) 90%, transparent);
+    --aca-glass-border: color-mix(in srgb, var(--white30a, rgba(255, 255, 255, 0.3)) 60%, var(--SmartThemeBorderColor, rgba(0, 0, 0, 0.5)) 40%);
+    --aca-glass-border-strong: color-mix(in srgb, var(--aca-accent) 45%, var(--white50a, rgba(255, 255, 255, 0.5)) 55%);
+    --aca-text: var(--SmartThemeBodyColor, currentColor);
+    --aca-muted: var(--SmartThemeEmColor, rgba(190, 215, 245, 0.75));
     --aca-ok: #7bd88f;
     --aca-bad: #ff9a9a;
+    --aca-shadow: var(--SmartThemeShadowColor, rgba(0, 0, 0, 0.5));
+    --aca-accent: var(--SmartThemeQuoteColor, rgb(225, 138, 36));
 }
 
 .aca-description {
@@ -47,7 +50,7 @@
 .aca-group-chip.is-active {
     border-color: var(--aca-glass-border-strong);
     background: var(--aca-glass-bg-strong);
-    box-shadow: 0 0 10px rgba(110, 190, 255, 0.35);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--aca-accent) 35%, transparent);
 }
 
 .aca-site-list {
@@ -64,7 +67,7 @@
     border: 1px solid var(--aca-glass-border);
     backdrop-filter: blur(14px) saturate(150%);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
-    box-shadow: 0 6px 20px rgba(20, 50, 110, 0.18);
+    box-shadow: 0 6px 20px var(--aca-shadow);
     display: flex;
     flex-direction: column;
     gap: 0.5em;
@@ -72,7 +75,7 @@
 
 .aca-site-card.is-active {
     border-color: var(--aca-glass-border-strong);
-    box-shadow: 0 0 16px rgba(110, 190, 255, 0.35), 0 6px 20px rgba(20, 50, 110, 0.25);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--aca-accent) 30%, transparent), 0 6px 20px var(--aca-shadow);
 }
 
 .aca-site-badges {
@@ -86,7 +89,7 @@
     letter-spacing: 0.03em;
     padding: 0.15em 0.6em;
     border-radius: 999px;
-    background: rgba(120, 180, 255, 0.20);
+    background: color-mix(in srgb, var(--aca-accent) 12%, transparent);
     border: 1px solid var(--aca-glass-border);
     white-space: nowrap;
 }
@@ -130,7 +133,7 @@
 .aca-site-model.is-active {
     border-color: var(--aca-glass-border-strong);
     background: var(--aca-glass-bg-strong);
-    box-shadow: 0 0 12px rgba(110, 190, 255, 0.3);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--aca-accent) 30%, transparent);
 }
 
 .aca-site-meta {
@@ -151,19 +154,20 @@
 .aca-primary-button {
     padding: 0.35em 0.9em;
     border-radius: 0.6em;
-    border: 1px solid rgba(150, 220, 255, 0.55);
-    background: linear-gradient(135deg, rgba(56, 189, 248, 0.85), rgba(99, 102, 241, 0.85));
-    color: #f2f8ff;
+    border: 1px solid color-mix(in srgb, var(--aca-accent) 70%, transparent);
+    background: color-mix(in srgb, var(--aca-accent) 78%, var(--aca-tint) 22%);
+    color: var(--aca-text);
     font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(56, 140, 248, 0.35);
+    box-shadow: 0 4px 14px var(--aca-shadow);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
 }
 
 .aca-action-primary:hover,
 .aca-primary-button:hover {
-    box-shadow: 0 6px 20px rgba(56, 160, 255, 0.55);
+    border-color: var(--aca-accent);
+    box-shadow: 0 6px 20px var(--aca-shadow);
 }
 
 .aca-action-button,
@@ -197,7 +201,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.55em;
-    box-shadow: 0 6px 20px rgba(20, 50, 110, 0.18);
+    box-shadow: 0 6px 20px var(--aca-shadow);
 }
 
 .aca-editor.hidden,
@@ -272,8 +276,8 @@
     margin: 0.5em 0;
     padding: 0.55em;
     border-radius: 0.7em;
-    background: rgba(102, 158, 235, 0.14);
-    border: 1px solid rgba(150, 200, 255, 0.3);
+    background: var(--aca-glass-bg);
+    border: 1px solid var(--aca-glass-border);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
@@ -303,12 +307,12 @@
     width: 2.6em;
     height: 2.6em;
     border-radius: 50%;
-    border: 1px solid rgba(150, 220, 255, 0.5);
-    background: rgba(40, 90, 160, 0.55);
-    color: #eaf5ff;
+    border: 1px solid var(--aca-glass-border-strong);
+    background: color-mix(in srgb, var(--aca-accent) 55%, var(--aca-tint) 45%);
+    color: var(--aca-text);
     cursor: grab;
     font-size: 1.05em;
-    box-shadow: 0 0 14px rgba(90, 180, 255, 0.5), 0 4px 10px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--aca-accent) 40%, transparent), 0 4px 10px var(--aca-shadow);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     touch-action: none;
@@ -328,12 +332,12 @@
     overflow: auto;
     padding: 0.6em;
     border-radius: 0.9em;
-    background: rgba(38, 78, 140, 0.45);
-    border: 1px solid rgba(150, 200, 255, 0.35);
-    color: #eaf5ff;
-    box-shadow: 0 8px 28px rgba(10, 30, 70, 0.45), 0 0 18px rgba(90, 180, 255, 0.22) inset;
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    background: color-mix(in srgb, var(--aca-tint) 82%, transparent);
+    border: 1px solid var(--aca-glass-border);
+    color: var(--aca-text);
+    box-shadow: 0 8px 28px var(--aca-shadow);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 #aca-float-root.hidden,
@@ -351,7 +355,7 @@
     user-select: none;
     touch-action: none;
     padding-bottom: 0.25em;
-    border-bottom: 1px solid rgba(150, 200, 255, 0.25);
+    border-bottom: 1px solid var(--aca-glass-border);
 }
 
 #aca-float-root .aca-float-header:active {
@@ -378,7 +382,7 @@
 }
 
 #aca-float-list .aca-float-item.is-active {
-    outline: 1px solid rgba(130, 205, 255, 0.7);
+    outline: 1px solid color-mix(in srgb, var(--aca-accent) 65%, transparent);
 }
 
 #aca-float-list .aca-float-row {
@@ -396,8 +400,8 @@
     white-space: nowrap;
     padding: 0.3em 0.5em;
     border-radius: 0.4em;
-    border: 1px solid rgba(150, 200, 255, 0.3);
-    background: rgba(70, 120, 190, 0.35);
+    border: 1px solid var(--aca-glass-border);
+    background: color-mix(in srgb, var(--aca-tint) 60%, transparent);
     color: inherit;
     cursor: pointer;
 }
@@ -430,16 +434,16 @@
     white-space: nowrap;
     padding: 0.15em 0.5em;
     border-radius: 999px;
-    border: 1px solid rgba(120, 180, 255, 0.5);
-    background: rgba(60, 110, 190, 0.45);
+    border: 1px solid color-mix(in srgb, var(--aca-accent) 40%, transparent);
+    background: color-mix(in srgb, var(--aca-tint) 55%, transparent);
     color: inherit;
     font-size: 0.78em;
     cursor: pointer;
 }
 
 .aca-model-chip:hover {
-    background: rgba(95, 150, 220, 0.65);
-    box-shadow: 0 0 10px rgba(110, 190, 255, 0.35);
+    background: color-mix(in srgb, var(--aca-tint) 75%, transparent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--aca-accent) 35%, transparent);
 }
 
 .aca-api-model {
@@ -508,7 +512,7 @@
     flex-direction: column;
     gap: 0.5em;
     margin-bottom: 0.6em;
-    box-shadow: 0 6px 20px rgba(20, 50, 110, 0.18);
+    box-shadow: 0 6px 20px var(--aca-shadow);
 }
 
 .aca-picker-title {
@@ -541,7 +545,7 @@
     gap: 0.1em;
     padding: 0.3em;
     border-radius: 0.6em;
-    background: rgba(102, 158, 235, 0.08);
+    background: color-mix(in srgb, var(--aca-tint) 40%, transparent);
     border: 1px solid var(--aca-glass-border);
 }
 
@@ -582,12 +586,7 @@
     min-width: 0;
 }
 
-/* v2.1.0: 悬浮窗性能：毛玻璃只留一层并去掉最贵的 saturate；子元素不再各自采样背景 */
-#aca-float-root {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
-
+/* 悬浮窗性能：子元素不再各自采样背景（毛玻璃单层在 #aca-float-root） */
 #aca-float-list {
     overscroll-behavior: contain;
 }
@@ -651,7 +650,7 @@
 }
 
 .aca-tutorial-section {
-    border-top: 1px solid rgba(150, 200, 255, 0.18);
+    border-top: 1px solid var(--aca-glass-border);
     padding-top: 0.45em;
 }
 

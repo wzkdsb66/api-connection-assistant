@@ -57,6 +57,10 @@ https://github.com/wzkdsb66/api-connection-assistant
 - 点站点名切换；点「模」展开模型按钮，点具体模型即切换。
 - 勾选「使用站点后自动同步到快切窗」后，每次切换都会高亮当前站点。
 
+## 界面配色
+
+毛玻璃面板、按钮、徽章、悬浮球 / 悬浮窗、强调光效全部取自酒馆当前主题的 CSS 变量（`SmartTheme` 系列，经 `color-mix` 混合出毛玻璃层次）。**换主题（或深浅色）后扩展界面自动跟随，无需任何设置**。成功 / 失败的语义色（KEY ✓ / ✗）保持固定以保证辨识度。
+
 ## 界面语言
 
 - 扩展设置面板里可选：**跟随酒馆 / 中文 / English**，选择即时生效并记住。
@@ -141,6 +145,10 @@ Card actions: click a **model row** to switch straight to it; buttons are **Use*
 
 - Enable it in settings to get the ⚡ ball. Both the ball and the window are **draggable**, with positions remembered.
 - Click a site name to switch; click "模" to expand model chips and click a model to switch to it.
+
+## Theming
+
+Frosted panels, buttons, badges, the floating ball / window, and accent glows are all derived from SillyTavern's current theme variables (`SmartTheme`, blended with `color-mix` for the glass layers). **Switching themes (or light/dark) automatically restyles the extension - no settings needed**. Success / failure semantic colors (KEY ✓ / ✗) stay fixed for recognizability.
 
 ## Interface Language
 
