@@ -646,6 +646,7 @@ function renderAll() {
     renderSiteList();
     renderApiEntry();
     renderFloatWindow();
+    renderWandPanel();
     renderEditor();
 }
 // ---------- 编辑器 ----------
