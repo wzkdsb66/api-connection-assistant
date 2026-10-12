@@ -135,8 +135,12 @@
   "site.untitled": "未命名站点",
   "wand.button": "API 快切",
   "wand.title": "快速切换 API",
-  "wand.hint": "点站点名切换 · 点「{m}」挑模型",
+  "wand.hint": "点模型行切换 · 点站点行展开收起",
   "action.modelsShort": "模",
   "tutorial.wandTitle": "魔术棒快切（手机友好）",
-  "tutorial.wandBody": "聊天输入框旁的魔术棒（✨）菜单里有「API 快切」，点开是一个不挡屏幕的紧凑面板：点站点名直接切换，点「模」挑模型，切换成功自动收起。手机上不用去够⚡球。"
+  "tutorial.wandBody": "聊天输入框旁的魔术棒（✨）菜单里有「API 快切」，点开是一个大面板：顶部搜索框过滤站点或模型，点站点行展开它的模型列表，点模型行直接切换，切换成功自动收起。手机上它是个居中大面板，不用去够⚡球。",
+  "wand.search": "搜索站点或模型…",
+  "wand.searchClear": "清空搜索",
+  "wand.noMatch": "没有匹配的站点",
+  "wand.noModels": "暂无模型"
 }

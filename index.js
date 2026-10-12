@@ -1165,6 +1165,7 @@ function createApiEntry() {
 // ---------- 魔术棒快捷面板 ----------
 
 let wandActive = false;
+let wandSearch = '';
 let wandOutsideClickHandler = null;
 let wandEscapeHandler = null;
 
@@ -1208,41 +1209,56 @@ function createWandPanel() {
     panel.classList.add('hidden');
     panel.innerHTML = `
         <div class="aca-wand-header">
+            <i class="fa-solid fa-plug"></i>
             <span id="aca-wand-title">${escapeHtml(tr('wand.title'))}</span>
             <button type="button" class="aca-wand-close" title="${tr('float.collapse')}">&times;</button>
         </div>
+        <div class="aca-wand-search">
+            <input type="text" id="aca-wand-search-input" placeholder="${escapeHtml(tr('wand.search'))}" autocomplete="off">
+            <button type="button" class="aca-wand-search-clear" title="${tr('wand.searchClear')}">&times;</button>
+        </div>
         <div id="aca-wand-list"></div>
-        <div class="aca-wand-hint" id="aca-wand-hint">${escapeHtml(tr('wand.hint', { m: tr('action.modelsShort') }))}</div>
+        <div class="aca-wand-hint" id="aca-wand-hint">${escapeHtml(tr('wand.hint'))}</div>
     `;
     panel.querySelector('.aca-wand-close')?.addEventListener('click', closeWandPanel);
+    const searchInput = panel.querySelector('#aca-wand-search-input');
+    searchInput?.addEventListener('input', (event) => {
+        wandSearch = event.target?.value ?? '';
+        renderWandPanel();
+    });
+    panel.querySelector('.aca-wand-search-clear')?.addEventListener('click', () => {
+        wandSearch = '';
+        if (searchInput) searchInput.value = '';
+        renderWandPanel();
+    });
     panel.addEventListener('click', async (event) => {
-        const button = event.target.closest('button');
         const item = event.target.closest('.aca-wand-item');
-        if (!item || !button) return;
+        if (!item) return;
         const siteId = item.dataset.siteId;
         const site = findSiteById(siteId);
         if (!site) return;
-        if (button.classList.contains('aca-wand-name')) {
+        const modelRow = event.target.closest('.aca-wand-model-row');
+        if (modelRow) {
             try {
-                const applied = await applySite(siteId);
-                toastr?.success?.(tr('toast.switched', { name: applied.name }), toastTitle());
+                const applied = await applySite(siteId, modelRow.dataset.model);
+                toastr?.success?.(tr('toast.switchedModel', { name: applied.name, model: modelRow.dataset.model }), toastTitle());
                 closeWandPanel();
             } catch (error) {
                 toastr?.error?.(error?.message ?? String(error), toastTitle());
             }
             return;
         }
-        if (button.classList.contains('aca-model-chip')) {
-            try {
-                const applied = await applySite(siteId, button.dataset.model);
-                toastr?.success?.(tr('toast.switchedModel', { name: applied.name, model: button.dataset.model }), toastTitle());
-                closeWandPanel();
-            } catch (error) {
-                toastr?.error?.(error?.message ?? String(error), toastTitle());
+        if (event.target.closest('.aca-wand-site')) {
+            if (site.models.length === 0) {
+                try {
+                    const applied = await applySite(siteId);
+                    toastr?.success?.(tr('toast.switched', { name: applied.name }), toastTitle());
+                    closeWandPanel();
+                } catch (error) {
+                    toastr?.error?.(error?.message ?? String(error), toastTitle());
+                }
+                return;
             }
-            return;
-        }
-        if (button.dataset.action === 'models') {
             if (expandedSiteModels.has(siteId)) expandedSiteModels.delete(siteId);
             else expandedSiteModels.add(siteId);
             renderWandPanel();
@@ -1272,6 +1288,9 @@ function toggleWandPanel() {
     const panel = document.getElementById('aca-wand-panel');
     if (!panel) return;
     if (panel.classList.contains('hidden')) {
+        wandSearch = '';
+        const searchInput = document.getElementById('aca-wand-search-input');
+        if (searchInput) searchInput.value = '';
         renderWandPanel();
         panel.classList.remove('hidden');
     } else {
@@ -1279,25 +1298,66 @@ function toggleWandPanel() {
     }
 }
 
+function wandSiteMeta(site) {
+    const count = site.models.length;
+    if (count === 0) return tr('wand.noModels');
+    let meta = tr('badge.models', { n: count });
+    if (site.model) meta += ` · ${site.model}`;
+    const rest = site.model ? count - 1 : count;
+    if (rest > 0) meta += ` +${rest}`;
+    return meta;
+}
+
 function renderWandPanel() {
     const list = document.getElementById('aca-wand-list');
     if (!list) return;
     const settings = getSettings();
-    const sites = getSortedSites();
+    const query = wandSearch.trim().toLowerCase();
+    const searching = query.length > 0;
+    const all = getSortedSites();
+    const sites = searching
+        ? all.filter((site) => site.name.toLowerCase().includes(query)
+            || (site.model ?? '').toLowerCase().includes(query)
+            || site.models.some((model) => model.toLowerCase().includes(query)))
+        : all;
     if (sites.length === 0) {
-        list.innerHTML = `<div class="aca-empty">${tr('list.noSites')}</div>`;
+        list.innerHTML = `<div class="aca-empty">${searching ? tr('wand.noMatch') : tr('list.noSites')}</div>`;
         return;
     }
-    list.innerHTML = sites.map((site) => `
-        <div class="aca-wand-item${site.id === settings.activeSiteId ? ' is-active' : ''}" data-site-id="${escapeHtml(site.id)}">
-            <div class="aca-wand-row">
-                <button type="button" class="aca-wand-name" title="${escapeHtml(site.name)}">${escapeHtml(site.name)}</button>
-                <span class="aca-wand-model" title="${escapeHtml(site.model || tr('meta.noModel'))}">${escapeHtml(site.model || tr('meta.noModel'))}</span>
-                <button type="button" class="aca-action-button" data-action="models" title="${tr('float.toggleModels')}">${escapeHtml(tr('action.modelsShort'))}</button>
-            </div>
-            ${renderModelChips(site)}
-        </div>
-    `).join('');
+    list.innerHTML = sites.map((site) => {
+        const isExpanded = searching || expandedSiteModels.has(site.id);
+        const hasModels = site.models.length > 0;
+        const chevron = hasModels
+            ? `<span class="aca-wand-chevron">${isExpanded ? '▾' : '▸'}</span>`
+            : '<span class="aca-wand-chevron"><i class="fa-solid fa-plug"></i></span>';
+        const modelRows = isExpanded && hasModels
+            ? site.models.map((model) => {
+                const activeClass = model === site.model ? ' is-active' : '';
+                return `
+                <div class="aca-wand-model-row${activeClass}" data-model="${escapeHtml(model)}">
+                    <span class="aca-wand-dot${activeClass}"></span>
+                    <div class="aca-wand-model-info">
+                        <span class="aca-wand-model-name">${escapeHtml(model)}</span>
+                        <span class="aca-wand-model-site">${escapeHtml(site.name)}</span>
+                    </div>
+                </div>`;
+            }).join('')
+            : '';
+        const modelsBlock = modelRows ? `<div class="aca-wand-models">${modelRows}</div>` : '';
+        const siteActiveClass = site.id === settings.activeSiteId ? ' is-active' : '';
+        return `
+            <div class="aca-wand-item${siteActiveClass}" data-site-id="${escapeHtml(site.id)}">
+                <div class="aca-wand-site">
+                    <span class="aca-wand-dot${siteActiveClass}"></span>
+                    <div class="aca-wand-site-info">
+                        <span class="aca-wand-site-name">${escapeHtml(site.name)}</span>
+                        <span class="aca-wand-site-meta">${escapeHtml(wandSiteMeta(site))}</span>
+                    </div>
+                    ${chevron}
+                </div>
+                ${modelsBlock}
+            </div>`;
+    }).join('');
 }
 
 function syncWandTexts() {
@@ -1307,8 +1367,12 @@ function syncWandTexts() {
     if (button) button.title = tr('wand.button');
     const title = document.getElementById('aca-wand-title');
     if (title) title.textContent = tr('wand.title');
+    const searchInput = document.getElementById('aca-wand-search-input');
+    if (searchInput) searchInput.placeholder = tr('wand.search');
+    const clearButton = document.querySelector('#aca-wand-panel .aca-wand-search-clear');
+    if (clearButton) clearButton.title = tr('wand.searchClear');
     const hint = document.getElementById('aca-wand-hint');
-    if (hint) hint.textContent = tr('wand.hint', { m: tr('action.modelsShort') });
+    if (hint) hint.textContent = tr('wand.hint');
     const panel = document.getElementById('aca-wand-panel');
     if (panel && !panel.classList.contains('hidden')) renderWandPanel();
 }

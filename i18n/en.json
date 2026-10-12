@@ -135,8 +135,12 @@
   "site.untitled": "Unnamed site",
   "wand.button": "API Quick Switch",
   "wand.title": "Quick API Switch",
-  "wand.hint": "Tap a site to switch · tap {m} for models",
+  "wand.hint": "Tap a model row to switch · tap a site row to expand",
   "action.modelsShort": "M",
   "tutorial.wandTitle": "Wand quick switch (phone-friendly)",
-  "tutorial.wandBody": "The wand (✨) menu next to the chat input has an \"API Quick Switch\" entry. It opens a compact panel that does not block your screen: tap a site name to switch, tap the model button to pick a model, and it closes by itself after a successful switch. No need to reach for the ⚡ ball on your phone."
+  "tutorial.wandBody": "The wand (✨) menu next to the chat input has an \"API Quick Switch\" entry. It opens a large panel: use the search box to filter sites or models, tap a site row to expand its model list, tap a model row to switch, and it closes by itself after a successful switch. On phones it opens as a big centered sheet, so you never have to reach for the ⚡ ball.",
+  "wand.search": "Search sites or models…",
+  "wand.searchClear": "Clear search",
+  "wand.noMatch": "No matching sites",
+  "wand.noModels": "No models"
 }
