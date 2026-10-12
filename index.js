@@ -100,6 +100,7 @@ async function applyLanguage() {
         renderPickerList();
     }
     syncKeyToggleLabel();
+    syncWandTexts();
     renderAll();
 }
 
@@ -619,7 +620,7 @@ function renderFloatWindow() {
             <div class="aca-float-row">
                 <button type="button" class="aca-float-name" title="${escapeHtml(site.name)}">${escapeHtml(site.name)}</button>
                 <span class="aca-float-model" title="${escapeHtml(site.model || tr('meta.noModel'))}">${escapeHtml(site.model || tr('meta.noModel'))}</span>
-                <button type="button" class="aca-action-button" data-action="models" title="${tr('float.toggleModels')}">模</button>
+                <button type="button" class="aca-action-button" data-action="models" title="${tr('float.toggleModels')}">${escapeHtml(tr('action.modelsShort'))}</button>
             </div>
             ${renderModelChips(site)}
         </div>
@@ -1161,6 +1162,156 @@ function createApiEntry() {
     anchor.after(entry);
 }
 
+// ---------- 魔术棒快捷面板 ----------
+
+let wandActive = false;
+let wandOutsideClickHandler = null;
+let wandEscapeHandler = null;
+
+function createWandEntry() {
+    if (document.getElementById('aca-wand-container')) return true;
+    const menu = document.getElementById('extensionsMenu');
+    if (!menu) return false;
+    const container = document.createElement('div');
+    container.id = 'aca-wand-container';
+    container.className = 'extension_container';
+    const button = document.createElement('div');
+    button.id = 'aca-wand-button';
+    button.className = 'list-group-item flex-container flexGap5';
+    button.title = tr('wand.button');
+    button.innerHTML = `
+        <div class="fa-solid fa-plug extensionsMenuExtensionButton"></div>
+        <span id="aca-wand-button-label">${escapeHtml(tr('wand.button'))}</span>
+    `;
+    button.addEventListener('click', () => toggleWandPanel());
+    container.append(button);
+    menu.append(container);
+    return true;
+}
+
+function ensureWandEntry() {
+    let attempts = 0;
+    const tryCreate = () => {
+        if (!wandActive) return;
+        if (createWandEntry()) return;
+        attempts += 1;
+        if (attempts < 15) setTimeout(tryCreate, 200);
+    };
+    tryCreate();
+}
+
+function createWandPanel() {
+    if (document.getElementById('aca-wand-panel')) return;
+    const panel = document.createElement('div');
+    panel.id = 'aca-wand-panel';
+    panel.dataset.extensionId = MODULE_ID;
+    panel.classList.add('hidden');
+    panel.innerHTML = `
+        <div class="aca-wand-header">
+            <span id="aca-wand-title">${escapeHtml(tr('wand.title'))}</span>
+            <button type="button" class="aca-wand-close" title="${tr('float.collapse')}">&times;</button>
+        </div>
+        <div id="aca-wand-list"></div>
+        <div class="aca-wand-hint" id="aca-wand-hint">${escapeHtml(tr('wand.hint', { m: tr('action.modelsShort') }))}</div>
+    `;
+    panel.querySelector('.aca-wand-close')?.addEventListener('click', closeWandPanel);
+    panel.addEventListener('click', async (event) => {
+        const button = event.target.closest('button');
+        const item = event.target.closest('.aca-wand-item');
+        if (!item || !button) return;
+        const siteId = item.dataset.siteId;
+        const site = findSiteById(siteId);
+        if (!site) return;
+        if (button.classList.contains('aca-wand-name')) {
+            try {
+                const applied = await applySite(siteId);
+                toastr?.success?.(tr('toast.switched', { name: applied.name }), toastTitle());
+                closeWandPanel();
+            } catch (error) {
+                toastr?.error?.(error?.message ?? String(error), toastTitle());
+            }
+            return;
+        }
+        if (button.classList.contains('aca-model-chip')) {
+            try {
+                const applied = await applySite(siteId, button.dataset.model);
+                toastr?.success?.(tr('toast.switchedModel', { name: applied.name, model: button.dataset.model }), toastTitle());
+                closeWandPanel();
+            } catch (error) {
+                toastr?.error?.(error?.message ?? String(error), toastTitle());
+            }
+            return;
+        }
+        if (button.dataset.action === 'models') {
+            if (expandedSiteModels.has(siteId)) expandedSiteModels.delete(siteId);
+            else expandedSiteModels.add(siteId);
+            renderWandPanel();
+        }
+    });
+    document.body.append(panel);
+    wandOutsideClickHandler = (event) => {
+        const panelElement = document.getElementById('aca-wand-panel');
+        if (!panelElement || panelElement.classList.contains('hidden')) return;
+        if (panelElement.contains(event.target)) return;
+        const buttonElement = document.getElementById('aca-wand-button');
+        if (buttonElement && buttonElement.contains(event.target)) return;
+        closeWandPanel();
+    };
+    wandEscapeHandler = (event) => {
+        if (event.key === 'Escape') closeWandPanel();
+    };
+    document.addEventListener('click', wandOutsideClickHandler);
+    document.addEventListener('keydown', wandEscapeHandler);
+}
+
+function closeWandPanel() {
+    document.getElementById('aca-wand-panel')?.classList.add('hidden');
+}
+
+function toggleWandPanel() {
+    const panel = document.getElementById('aca-wand-panel');
+    if (!panel) return;
+    if (panel.classList.contains('hidden')) {
+        renderWandPanel();
+        panel.classList.remove('hidden');
+    } else {
+        closeWandPanel();
+    }
+}
+
+function renderWandPanel() {
+    const list = document.getElementById('aca-wand-list');
+    if (!list) return;
+    const settings = getSettings();
+    const sites = getSortedSites();
+    if (sites.length === 0) {
+        list.innerHTML = `<div class="aca-empty">${tr('list.noSites')}</div>`;
+        return;
+    }
+    list.innerHTML = sites.map((site) => `
+        <div class="aca-wand-item${site.id === settings.activeSiteId ? ' is-active' : ''}" data-site-id="${escapeHtml(site.id)}">
+            <div class="aca-wand-row">
+                <button type="button" class="aca-wand-name" title="${escapeHtml(site.name)}">${escapeHtml(site.name)}</button>
+                <span class="aca-wand-model" title="${escapeHtml(site.model || tr('meta.noModel'))}">${escapeHtml(site.model || tr('meta.noModel'))}</span>
+                <button type="button" class="aca-action-button" data-action="models" title="${tr('float.toggleModels')}">${escapeHtml(tr('action.modelsShort'))}</button>
+            </div>
+            ${renderModelChips(site)}
+        </div>
+    `).join('');
+}
+
+function syncWandTexts() {
+    const label = document.getElementById('aca-wand-button-label');
+    if (label) label.textContent = tr('wand.button');
+    const button = document.getElementById('aca-wand-button');
+    if (button) button.title = tr('wand.button');
+    const title = document.getElementById('aca-wand-title');
+    if (title) title.textContent = tr('wand.title');
+    const hint = document.getElementById('aca-wand-hint');
+    if (hint) hint.textContent = tr('wand.hint', { m: tr('action.modelsShort') });
+    const panel = document.getElementById('aca-wand-panel');
+    if (panel && !panel.classList.contains('hidden')) renderWandPanel();
+}
 // ---------- 旧数据迁移 ----------
 
 function migrateLegacyProfiles() {
@@ -1216,6 +1367,10 @@ async function onActivate() {
     await applyLanguage();
     if (!document.getElementById('aca-float-ball')) createFloatWindow();
     createApiEntry();
+    wandActive = true;
+    createWandPanel();
+    ensureWandEntry();
+    syncWandTexts();
     bindGenerationEvents(context);
     renderAll();
 }
@@ -1394,6 +1549,17 @@ function onDisable() {
         window.removeEventListener('resize', viewportClampHandler);
         viewportClampHandler = null;
     }
+    wandActive = false;
+    if (wandOutsideClickHandler) {
+        document.removeEventListener('click', wandOutsideClickHandler);
+        wandOutsideClickHandler = null;
+    }
+    if (wandEscapeHandler) {
+        document.removeEventListener('keydown', wandEscapeHandler);
+        wandEscapeHandler = null;
+    }
+    document.getElementById('aca-wand-panel')?.remove();
+    document.getElementById('aca-wand-container')?.remove();
     document.getElementById('aca-settings-root')?.remove();
     document.getElementById('aca-float-ball')?.remove();
     document.getElementById('aca-float-root')?.remove();

@@ -699,3 +699,146 @@
     display: block;
     margin-bottom: 0.1em;
 }
+
+/* ---------- 魔术棒快捷面板 ---------- */
+
+#aca-wand-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 4.5em;
+    transform: translateX(-50%);
+    z-index: 10001;
+    width: min(30em, 92vw);
+    max-height: 55vh;
+    overflow: auto;
+    padding: 0.7em;
+    border-radius: 0.9em;
+    background: color-mix(in srgb, var(--aca-tint) 85%, transparent);
+    border: 1px solid var(--aca-glass-border);
+    color: var(--aca-text);
+    box-shadow: 0 10px 32px var(--aca-shadow);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+#aca-wand-panel.hidden {
+    display: none;
+}
+
+#aca-wand-panel .aca-wand-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 700;
+    margin-bottom: 0.4em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid var(--aca-glass-border);
+}
+
+#aca-wand-panel .aca-wand-close {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+#aca-wand-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+}
+
+#aca-wand-list .aca-wand-item {
+    border-radius: 0.5em;
+    padding: 0.15em;
+}
+
+#aca-wand-list .aca-wand-item.is-active {
+    outline: 1px solid color-mix(in srgb, var(--aca-accent) 65%, transparent);
+}
+
+#aca-wand-list .aca-wand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+}
+
+#aca-wand-list .aca-wand-name {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.3em 0.5em;
+    border-radius: 0.4em;
+    border: 1px solid var(--aca-glass-border);
+    background: color-mix(in srgb, var(--aca-tint) 60%, transparent);
+    color: inherit;
+    cursor: pointer;
+}
+
+.aca-wand-model {
+    max-width: 10em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+#aca-wand-panel .aca-wand-hint {
+    margin-top: 0.4em;
+    padding-top: 0.3em;
+    border-top: 1px solid var(--aca-glass-border);
+    font-size: 0.78em;
+    opacity: 0.75;
+    text-align: center;
+}
+
+/* ---------- 手机端紧凑化（悬浮窗 + 魔术棒面板） ---------- */
+
+@media (max-width: 600px) {
+    #aca-float-root {
+        width: min(16em, 88vw);
+        max-height: 50vh;
+        padding: 0.45em;
+    }
+
+    #aca-float-root .aca-float-header,
+    #aca-wand-panel .aca-wand-header {
+        font-size: 0.9em;
+        margin-bottom: 0.3em;
+    }
+
+    .aca-float-model,
+    .aca-wand-model {
+        display: none;
+    }
+
+    #aca-float-list .aca-float-name,
+    #aca-wand-list .aca-wand-name {
+        padding: 0.2em 0.4em;
+        font-size: 0.92em;
+    }
+
+    #aca-float-list .aca-action-button,
+    #aca-wand-list .aca-action-button {
+        padding: 0.15em 0.4em;
+        font-size: 0.8em;
+    }
+
+    .aca-model-chip {
+        font-size: 0.72em;
+        padding: 0.1em 0.45em;
+    }
+
+    #aca-wand-panel {
+        top: 50%;
+        bottom: auto;
+        transform: translate(-50%, -50%);
+        max-height: 62vh;
+        width: min(24em, 94vw);
+    }
+}

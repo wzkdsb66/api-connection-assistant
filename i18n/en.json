@@ -132,5 +132,11 @@
   "tutorial.langBody": "Choose \"Follow SillyTavern / Chinese / English\" in settings; it applies instantly.",
   "tutorial.outroTitle": "That is it - you are ready",
   "tutorial.outroBody": "Now click \"Add site\" and walk your own first site through the three steps. If \"Fetch models\" fails (some sites block direct browser requests), just type model IDs manually - everything else still works.",
-  "site.untitled": "Unnamed site"
+  "site.untitled": "Unnamed site",
+  "wand.button": "API Quick Switch",
+  "wand.title": "Quick API Switch",
+  "wand.hint": "Tap a site to switch · tap {m} for models",
+  "action.modelsShort": "M",
+  "tutorial.wandTitle": "Wand quick switch (phone-friendly)",
+  "tutorial.wandBody": "The wand (✨) menu next to the chat input has an \"API Quick Switch\" entry. It opens a compact panel that does not block your screen: tap a site name to switch, tap the model button to pick a model, and it closes by itself after a successful switch. No need to reach for the ⚡ ball on your phone."
 }

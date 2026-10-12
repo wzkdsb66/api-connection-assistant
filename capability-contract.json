@@ -88,6 +88,13 @@
       "symbol": "#extensions_settings2",
       "required": true,
       "fallback": null
+    },
+    {
+      "id": "wand-menu",
+      "owner": "dom",
+      "symbol": "#extensionsMenu (宿主 DOM，与内置翻译扩展相同的追加机制)",
+      "required": false,
+      "fallback": "魔术棒入口不可用（极少见），悬浮窗与设置面板不受影响"
     }
   ]
 }

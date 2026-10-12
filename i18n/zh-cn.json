@@ -132,5 +132,11 @@
   "tutorial.langBody": "设置里可选「跟随酒馆 / 中文 / English」，点一下立即生效。",
   "tutorial.outroTitle": "就这样，出师了",
   "tutorial.outroBody": "现在点「新增站点」，用你自己的第一个站点把三步走一遍。万一「获取模型」拉不到（有些站点不允许网页直连），手动写模型 ID 就行，不影响使用。",
-  "site.untitled": "未命名站点"
+  "site.untitled": "未命名站点",
+  "wand.button": "API 快切",
+  "wand.title": "快速切换 API",
+  "wand.hint": "点站点名切换 · 点「{m}」挑模型",
+  "action.modelsShort": "模",
+  "tutorial.wandTitle": "魔术棒快切（手机友好）",
+  "tutorial.wandBody": "聊天输入框旁的魔术棒（✨）菜单里有「API 快切」，点开是一个不挡屏幕的紧凑面板：点站点名直接切换，点「模」挑模型，切换成功自动收起。手机上不用去够⚡球。"
 }
