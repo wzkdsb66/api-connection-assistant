@@ -1192,8 +1192,6 @@ function createApiEntry() {
 
 let wandActive = false;
 let wandSearch = '';
-let wandOutsideClickHandler = null;
-let wandEscapeHandler = null;
 
 function createWandEntry() {
     if (document.getElementById('aca-wand-container')) return true;
@@ -1268,7 +1266,6 @@ function createWandPanel() {
             try {
                 const applied = await applySite(siteId, modelRow.dataset.model);
                 toastr?.success?.(tr('toast.switchedModel', { name: applied.name, model: modelRow.dataset.model }), toastTitle());
-                closeWandPanel();
             } catch (error) {
                 toastr?.error?.(error?.message ?? String(error), toastTitle());
             }
@@ -1279,7 +1276,6 @@ function createWandPanel() {
                 try {
                     const applied = await applySite(siteId);
                     toastr?.success?.(tr('toast.switched', { name: applied.name }), toastTitle());
-                    closeWandPanel();
                 } catch (error) {
                     toastr?.error?.(error?.message ?? String(error), toastTitle());
                 }
@@ -1291,19 +1287,6 @@ function createWandPanel() {
         }
     });
     document.body.append(panel);
-    wandOutsideClickHandler = (event) => {
-        const panelElement = document.getElementById('aca-wand-panel');
-        if (!panelElement || panelElement.classList.contains('hidden')) return;
-        if (panelElement.contains(event.target)) return;
-        const buttonElement = document.getElementById('aca-wand-button');
-        if (buttonElement && buttonElement.contains(event.target)) return;
-        closeWandPanel();
-    };
-    wandEscapeHandler = (event) => {
-        if (event.key === 'Escape') closeWandPanel();
-    };
-    document.addEventListener('click', wandOutsideClickHandler);
-    document.addEventListener('keydown', wandEscapeHandler);
 }
 
 function closeWandPanel() {
@@ -1674,14 +1657,6 @@ function onDisable() {
         viewportClampHandler = null;
     }
     wandActive = false;
-    if (wandOutsideClickHandler) {
-        document.removeEventListener('click', wandOutsideClickHandler);
-        wandOutsideClickHandler = null;
-    }
-    if (wandEscapeHandler) {
-        document.removeEventListener('keydown', wandEscapeHandler);
-        wandEscapeHandler = null;
-    }
     document.getElementById('aca-wand-panel')?.remove();
     document.getElementById('aca-wand-container')?.remove();
     document.getElementById('aca-settings-root')?.remove();
