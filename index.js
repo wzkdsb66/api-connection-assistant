@@ -19,6 +19,7 @@ const expandedSiteModels = new Set();
 const languageDictionaries = new Map();
 const attemptedLanguages = new Set();
 const PICKER_RENDER_CAP = 300;
+const QUICK_SWITCH_PAGE_SIZE = 4;
 let currentLanguage = 'zh-cn';
 let editorSiteId = null;
 let activeGroupFilter = 'all';
@@ -26,6 +27,7 @@ let pickerModels = [];
 let pickerSelected = new Set();
 let pickerSiteId = null;
 let pickerSearch = '';
+let floatPage = 0;
 let viewportClampHandler = null;
 let pendingGenerationSiteId = null;
 let generationStartedHandler = null;
@@ -624,11 +626,16 @@ function renderFloatWindow() {
     floatRoot.style.right = 'auto';
     floatRoot.style.left = `${anchorX + 36}px`;
     floatRoot.style.top = `${anchorY + 36}px`;
-    const sites = getSortedSites();
-    if (sites.length === 0) {
+    const all = getSortedSites();
+    const pager = document.getElementById('aca-float-pager');
+    if (all.length === 0) {
         list.innerHTML = `<div class="aca-empty">${tr('list.noSites')}</div>`;
+        if (pager) pager.innerHTML = '';
         return;
     }
+    const pageCount = Math.max(1, Math.ceil(all.length / QUICK_SWITCH_PAGE_SIZE));
+    floatPage = Math.min(Math.max(0, floatPage), pageCount - 1);
+    const sites = all.slice(floatPage * QUICK_SWITCH_PAGE_SIZE, floatPage * QUICK_SWITCH_PAGE_SIZE + QUICK_SWITCH_PAGE_SIZE);
     list.innerHTML = sites.map((site) => `
         <div class="aca-float-item${site.id === settings.activeSiteId ? ' is-active' : ''}" data-site-id="${escapeHtml(site.id)}">
             <div class="aca-float-row">
@@ -639,6 +646,7 @@ function renderFloatWindow() {
             ${renderModelChips(site)}
         </div>
     `).join('');
+    if (pager) pager.innerHTML = renderPager(floatPage, pageCount, 'float');
 }
 
 function renderAll() {
@@ -1092,9 +1100,18 @@ function createFloatWindow() {
             <button type="button" class="aca-float-close" title="${tr('float.collapse')}">×</button>
         </div>
         <div id="aca-float-list"></div>
+        <div id="aca-float-pager"></div>
     `;
     floatRoot.querySelector('.aca-float-close')?.addEventListener('click', () => {
         floatRoot.classList.add('hidden');
+    });
+    floatRoot.querySelector('#aca-float-pager')?.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        if (button.dataset.action === 'float-prev') floatPage = Math.max(0, floatPage - 1);
+        else if (button.dataset.action === 'float-next') floatPage += 1;
+        else return;
+        renderFloatWindow();
     });
     floatRoot.addEventListener('click', async (event) => {
         const button = event.target.closest('button');
@@ -1193,6 +1210,7 @@ function createApiEntry() {
 
 let wandActive = false;
 let wandSearch = '';
+let wandPage = 0;
 
 function createWandEntry() {
     if (document.getElementById('aca-wand-container')) return true;
@@ -1243,12 +1261,14 @@ function createWandPanel() {
             <button type="button" class="aca-wand-search-clear" title="${tr('wand.searchClear')}">&times;</button>
         </div>
         <div id="aca-wand-list"></div>
+        <div id="aca-wand-pager"></div>
         <div class="aca-wand-hint" id="aca-wand-hint">${escapeHtml(tr('wand.hint'))}</div>
     `;
     panel.querySelector('.aca-wand-close')?.addEventListener('click', closeWandPanel);
     const searchInput = panel.querySelector('#aca-wand-search-input');
     searchInput?.addEventListener('input', (event) => {
         wandSearch = event.target?.value ?? '';
+        wandPage = 0;
         renderWandPanel();
     });
     panel.querySelector('.aca-wand-search-clear')?.addEventListener('click', () => {
@@ -1287,6 +1307,14 @@ function createWandPanel() {
             renderWandPanel();
         }
     });
+    panel.querySelector('#aca-wand-pager')?.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        if (button.dataset.action === 'wand-prev') wandPage = Math.max(0, wandPage - 1);
+        else if (button.dataset.action === 'wand-next') wandPage += 1;
+        else return;
+        renderWandPanel();
+    });
     document.body.append(panel);
 }
 
@@ -1299,6 +1327,7 @@ function toggleWandPanel() {
     if (!panel) return;
     if (panel.classList.contains('hidden')) {
         wandSearch = '';
+        wandPage = 0;
         const searchInput = document.getElementById('aca-wand-search-input');
         if (searchInput) searchInput.value = '';
         renderWandPanel();
@@ -1327,10 +1356,18 @@ function positionWandPanel() {
         const rect = button.getBoundingClientRect();
         const buttonDocLeft = rect.left + scrollX;
         const buttonDocTop = rect.top + scrollY;
+        const viewTop = scrollY;
+        const viewBottom = scrollY + window.innerHeight;
         left = buttonDocLeft;
         top = buttonDocTop - panelHeight - gap;
-        if (top < scrollY + gap) {
+        if (top < viewTop + gap) {
             top = buttonDocTop + rect.height + gap;
+        }
+        if (top + panelHeight > viewBottom - gap) {
+            top = viewBottom - panelHeight - gap;
+        }
+        if (top < viewTop + gap) {
+            top = viewTop + gap;
         }
     } else {
         left = (docWidth - panelWidth) / 2;
@@ -1352,22 +1389,37 @@ function wandSiteMeta(site) {
     return meta;
 }
 
+function renderPager(page, pageCount, prefix) {
+    if (pageCount <= 1) return '';
+    return `
+        <div class="aca-pager">
+            <button type="button" class="aca-action-button" data-action="${prefix}-prev" ${page === 0 ? 'disabled' : ''}>‹ ${tr('pager.prev')}</button>
+            <span class="aca-pager-info">${page + 1} / ${pageCount}</span>
+            <button type="button" class="aca-action-button" data-action="${prefix}-next" ${page >= pageCount - 1 ? 'disabled' : ''}>${tr('pager.next')} ›</button>
+        </div>`;
+}
+
 function renderWandPanel() {
     const list = document.getElementById('aca-wand-list');
     if (!list) return;
+    const pager = document.getElementById('aca-wand-pager');
     const settings = getSettings();
     const query = wandSearch.trim().toLowerCase();
     const searching = query.length > 0;
     const all = getSortedSites();
-    const sites = searching
+    const matches = searching
         ? all.filter((site) => site.name.toLowerCase().includes(query)
             || (site.model ?? '').toLowerCase().includes(query)
             || site.models.some((model) => model.toLowerCase().includes(query)))
         : all;
-    if (sites.length === 0) {
+    if (matches.length === 0) {
         list.innerHTML = `<div class="aca-empty">${searching ? tr('wand.noMatch') : tr('list.noSites')}</div>`;
+        if (pager) pager.innerHTML = '';
         return;
     }
+    const pageCount = Math.max(1, Math.ceil(matches.length / QUICK_SWITCH_PAGE_SIZE));
+    wandPage = Math.min(Math.max(0, wandPage), pageCount - 1);
+    const sites = searching ? matches : matches.slice(wandPage * QUICK_SWITCH_PAGE_SIZE, wandPage * QUICK_SWITCH_PAGE_SIZE + QUICK_SWITCH_PAGE_SIZE);
     list.innerHTML = sites.map((site) => {
         const isExpanded = searching || expandedSiteModels.has(site.id);
         const hasModels = site.models.length > 0;
@@ -1402,6 +1454,7 @@ function renderWandPanel() {
                 ${modelsBlock}
             </div>`;
     }).join('');
+    if (pager) pager.innerHTML = searching ? '' : renderPager(wandPage, pageCount, 'wand');
 }
 
 function syncWandTexts() {

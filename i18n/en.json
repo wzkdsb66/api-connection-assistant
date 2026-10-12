@@ -119,7 +119,7 @@
   "tutorial.step3Body": "Click \"Use\" - the extension runs four official SillyTavern commands to swap the connection, and \"Switched to ...\" means it worked. Click a model row to switch models. The ⚡ ball (floating quick-switch) switches anytime; both the ball and the window can be dragged.",
   "tutorial.advancedTitle": "Once you are comfortable (advanced)",
   "tutorial.floatTitle": "Floating quick-switch window",
-  "tutorial.floatBody": "Check \"Enable floating quick-switch window\" in settings to get the ⚡ ball: click the ball to open/close the panel, click a site name to switch, click the model button to expand the model list. Positions are remembered.",
+  "tutorial.floatBody": "Check \"Enable floating quick-switch window\" in settings to get the ⚡ ball: click the ball to open/close the panel, click a site name to switch, click the model button to expand the model list. Sites show 4 per page — use the Previous / Next buttons at the bottom when you have more. Positions are remembered.",
   "tutorial.keyTitle": "Multiple keys per site",
   "tutorial.keyBody": "The key field accepts several keys separated by commas; the first is the default. The key button on the card rotates between them - handy when one key runs out of quota.",
   "tutorial.groupTitle": "Groups and sorting",
@@ -138,9 +138,11 @@
   "wand.hint": "Tap a model row to switch · tap a site row to expand",
   "action.modelsShort": "M",
   "tutorial.wandTitle": "Wand quick switch (phone-friendly)",
-  "tutorial.wandBody": "The wand (✨) menu next to the chat input has an \"API Quick Switch\" entry. It opens a large panel: use the search box to filter sites or models, tap a site row to expand its model list, tap a model row to switch, and it closes by itself after a successful switch. On phones it opens as a big centered sheet, so you never have to reach for the ⚡ ball.",
+  "tutorial.wandBody": "The wand (✨) menu next to the chat input has an \"API Quick Switch\" entry. It opens a large panel: use the search box to filter sites or models, tap a site row to expand its model list, tap a model row to switch. The panel stays open after a switch so you can switch several in a row; sites show 4 per page — use the Previous / Next buttons at the bottom of the panel when you have more, and close it with the × in the top-right corner. On phones the panel appears right above the wand button, so you never have to reach for the ⚡ ball.",
   "wand.search": "Search sites or models…",
   "wand.searchClear": "Clear search",
   "wand.noMatch": "No matching sites",
-  "wand.noModels": "No models"
+  "wand.noModels": "No models",
+  "pager.prev": "Previous",
+  "pager.next": "Next"
 }
