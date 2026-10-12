@@ -1358,13 +1358,23 @@ function positionWandPanel() {
         const buttonDocTop = rect.top + scrollY;
         const viewTop = scrollY;
         const viewBottom = scrollY + window.innerHeight;
+        const maxPanelHeight = window.innerHeight - gap * 2;
+        panel.style.position = 'absolute';
+        panel.style.left = '0px';
+        panel.style.top = '0px';
+        panel.style.visibility = 'hidden';
+        panel.style.maxHeight = `${Math.max(0, Math.floor(maxPanelHeight))}px`;
+        const reflowHeight = panel.offsetHeight;
+        const measuredHeight = Math.min(panelHeight, reflowHeight);
+        panel.style.maxHeight = '';
+        panel.style.visibility = '';
         left = buttonDocLeft;
-        top = buttonDocTop - panelHeight - gap;
+        top = buttonDocTop - measuredHeight - gap;
         if (top < viewTop + gap) {
             top = buttonDocTop + rect.height + gap;
         }
-        if (top + panelHeight > viewBottom - gap) {
-            top = viewBottom - panelHeight - gap;
+        if (top + measuredHeight > viewBottom - gap) {
+            top = viewBottom - measuredHeight - gap;
         }
         if (top < viewTop + gap) {
             top = viewTop + gap;
@@ -1403,6 +1413,8 @@ function renderWandPanel() {
     const list = document.getElementById('aca-wand-list');
     if (!list) return;
     const pager = document.getElementById('aca-wand-pager');
+    const panel = document.getElementById('aca-wand-panel');
+    if (!panel) return;
     const settings = getSettings();
     const query = wandSearch.trim().toLowerCase();
     const searching = query.length > 0;
@@ -1420,6 +1432,7 @@ function renderWandPanel() {
     const pageCount = Math.max(1, Math.ceil(matches.length / QUICK_SWITCH_PAGE_SIZE));
     wandPage = Math.min(Math.max(0, wandPage), pageCount - 1);
     const sites = searching ? matches : matches.slice(wandPage * QUICK_SWITCH_PAGE_SIZE, wandPage * QUICK_SWITCH_PAGE_SIZE + QUICK_SWITCH_PAGE_SIZE);
+    const savedScrollTop = list.scrollTop || 0;
     list.innerHTML = sites.map((site) => {
         const isExpanded = searching || expandedSiteModels.has(site.id);
         const hasModels = site.models.length > 0;
@@ -1455,6 +1468,11 @@ function renderWandPanel() {
             </div>`;
     }).join('');
     if (pager) pager.innerHTML = searching ? '' : renderPager(wandPage, pageCount, 'wand');
+    try {
+        list.scrollTop = savedScrollTop;
+    } catch {
+        /* scroll restore is best-effort */
+    }
 }
 
 function syncWandTexts() {
