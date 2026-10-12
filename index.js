@@ -257,6 +257,10 @@ function normalizeApiUrl(apiUrl) {
     return String(apiUrl ?? '').trim().replace(/\/+$/, '');
 }
 
+function toDocPoint(clientX, clientY) {
+    return { x: Math.round(clientX + (window.scrollX || 0)), y: Math.round(clientY + (window.scrollY || 0)) };
+}
+
 function nextSiteOrder(sites) {
     return sites.length > 0 ? Math.max(...sites.map((site) => site.order)) + 1 : 0;
 }
@@ -605,11 +609,21 @@ function renderFloatWindow() {
     document.getElementById('aca-float-title').textContent = tr('float.title');
     if (!enabled) return;
     const position = settings.floatWindowPosition;
+    let anchorX;
+    let anchorY;
     if (position && Number.isFinite(position.x) && Number.isFinite(position.y)) {
-        floatRoot.style.left = `${Math.max(0, position.x)}px`;
-        floatRoot.style.top = `${Math.max(0, position.y)}px`;
-        floatRoot.style.right = 'auto';
+        anchorX = position.x;
+        anchorY = position.y;
+    } else {
+        anchorX = Math.max(8, (window.scrollX || 0) + window.innerWidth - (ball.offsetWidth || 42) - 18);
+        anchorY = Math.max(8, (window.scrollY || 0) + Math.round(window.innerHeight * 0.4));
     }
+    ball.style.right = 'auto';
+    ball.style.left = `${anchorX}px`;
+    ball.style.top = `${anchorY}px`;
+    floatRoot.style.right = 'auto';
+    floatRoot.style.left = `${anchorX + 36}px`;
+    floatRoot.style.top = `${anchorY + 36}px`;
     const sites = getSortedSites();
     if (sites.length === 0) {
         list.innerHTML = `<div class="aca-empty">${tr('list.noSites')}</div>`;
@@ -936,10 +950,14 @@ function makeFloatDraggable(floatRoot) {
     let startLeft = 0;
     let startTop = 0;
 
-    const clampToViewport = (x, y) => ({
-        x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - floatRoot.offsetWidth)),
-        y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - floatRoot.offsetHeight)),
-    });
+    const clampToViewport = (x, y) => {
+        const scrollX = window.scrollX || 0;
+        const scrollY = window.scrollY || 0;
+        return {
+            x: Math.min(Math.max(scrollX, x), Math.max(scrollX, scrollX + window.innerWidth - floatRoot.offsetWidth)),
+            y: Math.min(Math.max(scrollY, y), Math.max(scrollY, scrollY + window.innerHeight - floatRoot.offsetHeight)),
+        };
+    };
 
     header.addEventListener('pointerdown', (event) => {
         if (event.target.closest('button')) return;
@@ -972,11 +990,12 @@ function makeFloatDraggable(floatRoot) {
         floatRoot.style.willChange = '';
         const rect = floatRoot.getBoundingClientRect();
         floatRoot.style.transform = '';
-        floatRoot.style.left = `${Math.round(rect.left)}px`;
-        floatRoot.style.top = `${Math.round(rect.top)}px`;
+        const doc = toDocPoint(rect.left, rect.top);
+        floatRoot.style.left = `${doc.x}px`;
+        floatRoot.style.top = `${doc.y}px`;
         floatRoot.style.right = 'auto';
         const settings = getSettings();
-        settings.floatWindowPosition = { x: Math.round(rect.left), y: Math.round(rect.top) };
+        settings.floatWindowPosition = doc;
         saveSettings();
     };
     header.addEventListener('pointerup', finishDrag);
@@ -990,10 +1009,14 @@ function makeBallDraggable(ball, floatRoot) {
     let offsetY = 0;
     let startLeft = 0;
     let startTop = 0;
-    const clamp = (x, y) => ({
-        x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - ball.offsetWidth)),
-        y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - ball.offsetHeight)),
-    });
+    const clamp = (x, y) => {
+        const scrollX = window.scrollX || 0;
+        const scrollY = window.scrollY || 0;
+        return {
+            x: Math.min(Math.max(scrollX, x), Math.max(scrollX, scrollX + window.innerWidth - ball.offsetWidth)),
+            y: Math.min(Math.max(scrollY, y), Math.max(scrollY, scrollY + window.innerHeight - ball.offsetHeight)),
+        };
+    };
     ball.addEventListener('pointerdown', (event) => {
         const rect = ball.getBoundingClientRect();
         startLeft = rect.left;
@@ -1026,14 +1049,15 @@ function makeBallDraggable(ball, floatRoot) {
         ball.style.willChange = '';
         const rect = ball.getBoundingClientRect();
         ball.style.transform = '';
-        ball.style.left = `${Math.round(rect.left)}px`;
-        ball.style.top = `${Math.round(rect.top)}px`;
+        const doc = toDocPoint(rect.left, rect.top);
+        ball.style.left = `${doc.x}px`;
+        ball.style.top = `${doc.y}px`;
         ball.style.right = 'auto';
         if (moved) {
             const settings = getSettings();
-            settings.floatWindowPosition = { x: Math.round(rect.left), y: Math.round(rect.top) };
-            floatRoot.style.left = `${Math.round(rect.left) + 36}px`;
-            floatRoot.style.top = `${Math.round(rect.top) + 36}px`;
+            settings.floatWindowPosition = doc;
+            floatRoot.style.left = `${doc.x + 36}px`;
+            floatRoot.style.top = `${doc.y + 36}px`;
             floatRoot.style.right = 'auto';
             saveSettings();
         }
@@ -1108,20 +1132,22 @@ function createFloatWindow() {
     viewportClampHandler = () => {
         const settings = getSettings();
         if (!settings.floatWindowPosition) return;
+        const scrollX = window.scrollX || 0;
+        const scrollY = window.scrollY || 0;
         let anyVisible = false;
         for (const element of [ball, floatRoot]) {
             if (element.classList.contains('hidden')) continue;
             anyVisible = true;
             const rect = element.getBoundingClientRect();
-            const x = Math.min(Math.max(0, rect.left), Math.max(0, window.innerWidth - element.offsetWidth));
-            const y = Math.min(Math.max(0, rect.top), Math.max(0, window.innerHeight - element.offsetHeight));
+            const x = Math.min(Math.max(scrollX, rect.left + scrollX), Math.max(scrollX, scrollX + window.innerWidth - element.offsetWidth));
+            const y = Math.min(Math.max(scrollY, rect.top + scrollY), Math.max(scrollY, scrollY + window.innerHeight - element.offsetHeight));
             element.style.left = `${x}px`;
             element.style.top = `${y}px`;
             element.style.right = 'auto';
         }
         if (!anyVisible) return;
         const rect = ball.getBoundingClientRect();
-        settings.floatWindowPosition = { x: Math.round(rect.left), y: Math.round(rect.top) };
+        settings.floatWindowPosition = toDocPoint(rect.left, rect.top);
         saveSettings();
     };
     window.addEventListener('resize', viewportClampHandler);
@@ -1293,9 +1319,43 @@ function toggleWandPanel() {
         if (searchInput) searchInput.value = '';
         renderWandPanel();
         panel.classList.remove('hidden');
+        positionWandPanel();
     } else {
         closeWandPanel();
     }
+}
+
+function positionWandPanel() {
+    const panel = document.getElementById('aca-wand-panel');
+    if (!panel) return;
+    panel.style.position = 'absolute';
+    panel.style.transform = 'none';
+    const panelWidth = panel.offsetWidth;
+    const panelHeight = panel.offsetHeight;
+    const scrollX = window.scrollX || 0;
+    const scrollY = window.scrollY || 0;
+    const docWidth = document.documentElement.scrollWidth || window.innerWidth;
+    const gap = 8;
+    const button = document.getElementById('aca-wand-button');
+    let left;
+    let top;
+    if (button) {
+        const rect = button.getBoundingClientRect();
+        const buttonDocLeft = rect.left + scrollX;
+        const buttonDocTop = rect.top + scrollY;
+        left = buttonDocLeft;
+        top = buttonDocTop - panelHeight - gap;
+        if (top < scrollY + gap) {
+            top = buttonDocTop + rect.height + gap;
+        }
+    } else {
+        left = (docWidth - panelWidth) / 2;
+        top = scrollY + Math.max(gap, (window.innerHeight - panelHeight) / 2);
+    }
+    const maxLeft = Math.max(gap, docWidth - panelWidth - gap);
+    left = Math.min(Math.max(gap, left), maxLeft);
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
 }
 
 function wandSiteMeta(site) {
