@@ -729,11 +729,18 @@
     display: flex;
     align-items: center;
     gap: 0.45em;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
     font-weight: 700;
     font-size: 1.05em;
     margin-bottom: 0.5em;
     padding-bottom: 0.4em;
     border-bottom: 1px solid var(--aca-glass-border);
+}
+
+#aca-wand-panel .aca-wand-header:active {
+    cursor: grabbing;
 }
 
 #aca-wand-panel .aca-wand-header .fa-plug {
@@ -785,10 +792,13 @@
 }
 
 #aca-wand-list {
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 0;
+    max-height: 100%;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    touch-action: pan-y;
     display: flex;
     flex-direction: column;
     gap: 0.45em;

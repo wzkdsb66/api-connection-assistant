@@ -1265,6 +1265,7 @@ function createWandPanel() {
         <div class="aca-wand-hint" id="aca-wand-hint">${escapeHtml(tr('wand.hint'))}</div>
     `;
     panel.querySelector('.aca-wand-close')?.addEventListener('click', closeWandPanel);
+    makeWandDraggable(panel);
     const searchInput = panel.querySelector('#aca-wand-search-input');
     searchInput?.addEventListener('input', (event) => {
         wandSearch = event.target?.value ?? '';
@@ -1316,6 +1317,60 @@ function createWandPanel() {
         renderWandPanel();
     });
     document.body.append(panel);
+}
+
+function makeWandDraggable(panel) {
+    const header = panel.querySelector('.aca-wand-header');
+    if (!header) return;
+    let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+    const clampToViewport = (x, y) => {
+        const scrollX = window.scrollX || 0;
+        const scrollY = window.scrollY || 0;
+        return {
+            x: Math.min(Math.max(scrollX, x), Math.max(scrollX, scrollX + window.innerWidth - panel.offsetWidth)),
+            y: Math.min(Math.max(scrollY, y), Math.max(scrollY, scrollY + window.innerHeight - panel.offsetHeight)),
+        };
+    };
+    header.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button')) return;
+        const rect = panel.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop = rect.top;
+        offsetX = event.clientX - rect.left;
+        offsetY = event.clientY - rect.top;
+        dragging = true;
+        panel.style.willChange = 'left, top';
+        try {
+            header.setPointerCapture(event.pointerId);
+        } catch {
+            /* pointer capture is best-effort */
+        }
+    });
+    header.addEventListener('pointermove', (event) => {
+        if (!dragging) return;
+        const { x, y } = clampToViewport(event.clientX - offsetX, event.clientY - offsetY);
+        panel.style.left = `${Math.round(x + window.scrollX)}px`;
+        panel.style.top = `${Math.round(y + window.scrollY)}px`;
+    });
+    const finishDrag = (event) => {
+        if (!dragging) return;
+        dragging = false;
+        try {
+            header.releasePointerCapture(event.pointerId);
+        } catch {
+            /* pointer capture is best-effort */
+        }
+        panel.style.willChange = '';
+        const rect = panel.getBoundingClientRect();
+        panel.style.left = `${Math.round(rect.left + window.scrollX)}px`;
+        panel.style.top = `${Math.round(rect.top + window.scrollY)}px`;
+    };
+    header.addEventListener('pointerup', finishDrag);
+    header.addEventListener('pointercancel', finishDrag);
 }
 
 function closeWandPanel() {
