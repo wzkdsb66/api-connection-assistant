@@ -1,5 +1,12 @@
 # 更新记录 / Changelog
 
+## 2.4.0（2026-10-12）
+
+**兼容性升级（老酒馆也能用）**
+- 最低酒馆版本从 `1.18.0` 下调到 `1.13.4`：旧版酒馆用户也能安装使用，PC 与 Termux 均覆盖
+- 语言自动检测改为多级降级：先读页面语言（1.18+ 写入的 `html lang`）→ 再读酒馆自己的语言设置（1.13.4 存于 `localStorage.language`）→ 再读浏览器语言；任一级可用即生效，仍可在设置里手动指定中 / English
+- 站点与分组 ID 生成增加兜底：非安全上下文（Termux 用 `http://IP` 访问时 `crypto.randomUUID` 不可用）自动改用随机串，存站点不再报错
+- 已对照 `1.13.4` 与 `1.18.0` 官方源码逐项验证两边一致：密钥体系（`SECRET_KEYS` / `writeSecret` / `deleteSecret`）、四条切换命令（`/api`、`/secret-id`、`/api-url`、`/model`）、生成事件（`GENERATION_STARTED` / `GENERATION_ENDED`）、三个挂载点 DOM（`#rm_api_block`、`#main-API-selector-block`、`#extensions_settings2`）、manifest `i18n` 字段、六个 SmartTheme 主题变量；扩展词条与酒馆语言表 134 键交叉比对零碰撞
 ## 2.3.0（2026-10-11）
 
 - 界面配色改为跟随酒馆主题：毛玻璃面板、按钮、徽章、悬浮球 / 悬浮窗、强调光效全部改用酒馆 SmartTheme 主题变量（color-mix 混合），换主题即自动跟随

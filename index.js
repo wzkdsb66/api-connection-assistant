@@ -34,7 +34,10 @@ let generationEndedHandler = null;
 // ---------- i18n ----------
 
 function detectBrowserLanguage() {
-    const lang = String(document.documentElement.lang ?? '').toLowerCase();
+    const htmlLang = String(document.documentElement?.lang ?? '').toLowerCase();
+    const storedLang = String(localStorage.getItem('language') ?? '').toLowerCase();
+    const browserLang = String(navigator.language ?? '').toLowerCase();
+    const lang = htmlLang || storedLang || browserLang;
     return lang.startsWith('zh') ? 'zh-cn' : 'en';
 }
 
@@ -237,6 +240,11 @@ function escapeHtml(value) {
         .replaceAll('>', '&#62;')
         .replaceAll('"', '&#34;')
         .replaceAll("'", '&#39;');
+}
+
+function newId() {
+    if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+    return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function formatTime(timestamp) {
@@ -681,7 +689,7 @@ async function saveEditor() {
     try {
         if (!site) {
             site = {
-                id: crypto.randomUUID(),
+                id: newId(),
                 name,
                 apiUrl,
                 type: 'openai-compatible',
@@ -756,7 +764,7 @@ function createGroup() {
         toastr?.warning?.(tr('toast.groupExists'), toastTitle());
         return;
     }
-    settings.groups.push({ id: crypto.randomUUID(), name });
+    settings.groups.push({ id: newId(), name });
     saveSettings();
     renderGroupFilter();
     renderEditorGroupSelect();
@@ -817,7 +825,7 @@ async function importSites(file) {
     for (const group of groups) {
         const name = String(group?.name ?? '').trim();
         if (!name || groupNameToId.has(name)) continue;
-        const id = crypto.randomUUID();
+        const id = newId();
         settings.groups.push({ id, name });
         groupNameToId.set(name, id);
         addedGroups += 1;
@@ -847,7 +855,7 @@ async function importSites(file) {
             }
         } else {
             const newSite = {
-                id: crypto.randomUUID(),
+                id: newId(),
                 name,
                 apiUrl,
                 type: ADAPTERS[site?.type] ? site.type : 'openai-compatible',
@@ -1164,7 +1172,7 @@ function migrateLegacyProfiles() {
         if (!profile || settings.sites.some((site) => site.name === profile.name)) continue;
         const models = Array.isArray(profile.models) ? profile.models : (profile.model ? [profile.model] : []);
         settings.sites.push({
-            id: typeof profile.id === 'string' ? profile.id : crypto.randomUUID(),
+            id: typeof profile.id === 'string' ? profile.id : newId(),
             name: String(profile.name ?? tr('site.untitled')),
             apiUrl: String(profile.apiUrl ?? ''),
             type: 'openai-compatible',

@@ -4,7 +4,7 @@
 
 ## 版本要求
 
-- SillyTavern `1.18.0` 或更高
+- SillyTavern `1.13.4` 或更高（已在 1.13.4 与 1.18.0 两个版本对照官方源码验证）
 - 密钥写入酒馆原生密钥库（`api_key_custom` 命名槽位），同时保存在本机扩展数据中
 - 不联网上报数据、不随角色卡导出
 - 更新记录见 [CHANGELOG.md](CHANGELOG.md)
@@ -94,7 +94,7 @@ Manage API connections as *sites*: name + URL + key + model list saved together 
 
 ## Requirements
 
-- SillyTavern `1.18.0` or newer
+- SillyTavern `1.13.4` or newer (verified against both 1.13.4 and 1.18.0 official sources)
 - Keys are written to SillyTavern's native secret store (`api_key_custom` slot) and also kept in the extension's local data
 - Nothing is reported online and nothing rides along with character cards
 - See [CHANGELOG.md](CHANGELOG.md) for the changelog

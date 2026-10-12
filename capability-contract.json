@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "minimum": {
-    "sillytavern": "1.18.0",
+    "sillytavern": "1.13.4",
     "tavernHelper": null
   },
   "requirements": [
@@ -53,6 +53,20 @@
       "symbol": "eventSource.on(eventTypes.GENERATION_STARTED/GENERATION_ENDED)",
       "required": false,
       "fallback": "使用统计不可用，切换与管理功能不受影响"
+    },
+    {
+      "id": "locale-detection",
+      "owner": "dom",
+      "symbol": "document.documentElement.lang || localStorage['language'] || navigator.language",
+      "required": false,
+      "fallback": "自动语言检测全部不可用时界面回退为中文，用户仍可在设置中手动切换中/英文"
+    },
+    {
+      "id": "secure-context-uuid",
+      "owner": "dom",
+      "symbol": "crypto.randomUUID (安全上下文)",
+      "required": false,
+      "fallback": "非安全上下文（如 Termux 的 http://IP 访问）下自动改用随机串兜底，站点与分组仍可正常保存"
     },
     {
       "id": "i18n-assets",
