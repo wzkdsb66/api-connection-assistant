@@ -1582,7 +1582,9 @@ function migrateLegacyProfiles() {
 
 // ---------- 生命周期 ----------
 
-async function onActivate() {
+let activationPromise = null;
+
+async function doActivate() {
     const context = getContext();
     const settings = getSettings();
     activeGroupFilter = 'all';
@@ -1774,6 +1776,7 @@ function bindSettingsControls(settings) {
 }
 
 function onDisable() {
+    activationPromise = null;
     try {
         unbindGenerationEvents(getContext());
     } catch {
@@ -1790,6 +1793,45 @@ function onDisable() {
     document.getElementById('aca-float-ball')?.remove();
     document.getElementById('aca-float-root')?.remove();
     document.getElementById('aca-api-entry')?.remove();
+}
+
+function onActivate() {
+    if (!activationPromise) {
+        activationPromise = doActivate().catch((error) => {
+            activationPromise = null;
+            throw error;
+        });
+    }
+    return activationPromise;
+}
+
+function isHostReady() {
+    try {
+        return Boolean(globalThis.SillyTavern?.getContext?.()?.extensionSettings);
+    } catch {
+        return false;
+    }
+}
+
+async function selfActivate() {
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+        if (isHostReady()) {
+            try {
+                await onActivate();
+            } catch (error) {
+                console.warn(`[${MODULE_ID}] activation failed`, error);
+            }
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+}
+
+if (typeof jQuery === 'function') {
+    jQuery(() => { void selfActivate(); });
+} else {
+    void selfActivate();
 }
 
 export { onActivate, onDisable };

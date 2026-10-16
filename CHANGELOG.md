@@ -1,5 +1,12 @@
 # 更新记录 / Changelog
 
+## 2.6.7（2026-10-16）
+
+**修复：兼容 SillyTavern 1.13.4（旧版不认 manifest.hooks，扩展改为自行初始化）**
+- 根因确认：1.13.4 的扩展加载器只做三件事——比对版本、加载 js/css、登记为已启用；它完全不读 manifest 的 `hooks` 字段，所以写在 `hooks.activate` 里的 `onActivate` 永远不会被调用。表现就是：扩展装上了、脚本也加载了，但设置面板、⚡悬浮窗、魔术棒入口一个都不出现。
+- 修法：脚本加载后自己等酒馆就绪（轮询 `SillyTavern.getContext().extensionSettings`，每 200 毫秒一次、最长 20 秒），就绪后自行启动激活流程；激活流程加幂等守卫（`activationPromise`），因此 1.18.0 这类支持 hooks 的新版仍走官方钩子，但绝不会被初始化两次。
+- 1.18.0 行为不变；1.13.4 起可正常使用设置面板、悬浮窗与魔术棒快切。
+- 已逐项比对 1.13.4 官方源码：context 接口（eventSource / eventTypes / extensionSettings / renderExtensionTemplateAsync / SlashCommandParser）、四条命令（`/api`、`/api-url`、`/model`、`/secret-id`）、secrets 导出（SECRET_KEYS / writeSecret / deleteSecret）、DOM 挂载点（#extensions_settings2、#rm_api_block、#main-API-selector-block、#leftSendForm）、语言存储（localStorage['language']）均可用；manifest 的 `minimum_client_version` 保持 1.13.4。
 ## 2.6.6（2026-10-13）
 
 **改进：魔术棒面板按悬浮窗交互重做（可拖标题栏 + 列表独立滑动）**
